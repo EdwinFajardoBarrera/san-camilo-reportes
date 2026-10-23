@@ -39,12 +39,37 @@ export async function logout(): Promise<void> {
 const statusSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(STATUSES),
+  // Día en que se arregló (YYYY-MM-DD), opcional; por defecto hoy.
+  resolvedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 });
+
+/** Mediodía en Mérida del día indicado, sin pasar de ahora. */
+function resolvedDate(day?: string): Date | undefined {
+  if (!day) return undefined;
+  const date = new Date(`${day}T12:00:00-06:00`);
+  return date > new Date() ? new Date() : date;
+}
 
 export async function changeStatus(formData: FormData): Promise<void> {
   await requireAdmin();
-  const { id, status } = statusSchema.parse({ id: formData.get("id"), status: formData.get("status") });
-  await setReportStatus(id, status);
+  const { id, status, resolvedOn } = statusSchema.parse({
+    id: formData.get("id"),
+    status: formData.get("status"),
+    resolvedOn: formData.get("resolvedOn") ?? undefined,
+  });
+  await setReportStatus(id, status, status === "resuelto" ? resolvedDate(resolvedOn) : undefined);
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+/** Marca un reporte como arreglado hoy. Se usa desde el mapa público. */
+export async function markFixed(id: string): Promise<void> {
+  await requireAdmin();
+  await setReportStatus(z.string().uuid().parse(id), "resuelto");
   revalidatePath("/");
   revalidatePath("/admin");
 }

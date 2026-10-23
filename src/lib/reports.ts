@@ -78,16 +78,20 @@ export async function createReport(input: NewReport, reporterHash: string): Prom
   return id;
 }
 
-export async function setReportStatus(id: string, status: Status): Promise<void> {
+/**
+ * Cambia el estado de un reporte. Al marcarlo como arreglado se guarda la fecha
+ * indicada (o la actual); nunca antes de la fecha del reporte.
+ */
+export async function setReportStatus(id: string, status: Status, resolvedAt?: Date): Promise<void> {
   const reviewed = status === "aprobado" || status === "rechazado";
   const resolved = status === "resuelto";
   await query(
     `UPDATE reports SET
        status = $2,
-       reviewed_at = CASE WHEN $3 THEN now() ELSE reviewed_at END,
-       resolved_at = CASE WHEN $4 THEN now() ELSE NULL END
+       reviewed_at = CASE WHEN $3 THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END,
+       resolved_at = CASE WHEN $4 THEN GREATEST(created_at, COALESCE($5::timestamptz, now())) ELSE NULL END
      WHERE id = $1`,
-    [id, status, reviewed, resolved],
+    [id, status, reviewed, resolved, resolvedAt ?? null],
   );
 }
 

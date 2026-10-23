@@ -13,9 +13,17 @@ export const NEIGHBORHOOD = {
     [20.96725, -89.5405179],
     [20.9818094, -89.5400888],
   ] satisfies LatLng[],
-  defaultZoom: 16,
   minZoom: 13,
+  // Margen alrededor de la colonia hasta donde se puede mover el mapa,
+  // relativo a su tamaño (1 = una colonia de ancho hacia cada lado).
+  panMargin: 1,
 } as const;
+
+/**
+ * Estilo vectorial del mapa base. OpenFreeMap es gratuito, de código abierto,
+ * sin API key ni límites de uso. Alternativas: "positron" (más sobrio) o "bright".
+ */
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 export const CATEGORIES = {
   bache: { label: "Bache", color: "#dc2626", icon: "🕳️" },
@@ -34,7 +42,7 @@ export const STATUS_LABELS: Record<Status, string> = {
   pendiente: "Pendiente",
   aprobado: "Aprobado",
   rechazado: "Rechazado",
-  resuelto: "Resuelto",
+  resuelto: "Arreglado",
 };
 
 /** Estados visibles para el público. */

@@ -14,7 +14,7 @@ Cualquiera puede ver el mapa y enviar un reporte tocando el punto donde está el
 | Parte | Tecnología | Costo |
 | --- | --- | --- |
 | Aplicación web (frontend + API) | [Next.js](https://nextjs.org) 15, React 19, TypeScript | Gratis (Vercel Hobby) |
-| Mapa | [Leaflet](https://leafletjs.com) + mosaicos de [OpenStreetMap](https://www.openstreetmap.org) | Gratis, sin API key |
+| Mapa | [MapLibre GL JS](https://maplibre.org) + mapa vectorial de [OpenFreeMap](https://openfreemap.org) (datos de OpenStreetMap) | Gratis, sin API key ni límites |
 | Base de datos | PostgreSQL ([Neon](https://neon.tech), plan gratuito) con `pg` + `attachDatabasePool` de Vercel | Gratis |
 
 Todo es software libre. No se guardan imágenes ni datos personales: la IP solo se guarda como hash irreversible para limitar envíos abusivos.
@@ -24,7 +24,8 @@ Todo es software libre. No se guardan imágenes ni datos personales: la IP solo 
 1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle y una descripción.
 2. El reporte se guarda como **Pendiente**.
 3. El administrador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
-4. Los aprobados aparecen en el mapa público. Cuando se arregla, se marca como **Resuelto** (se ve en verde con "Ver resueltos").
+4. Los aprobados aparecen en el mapa público, con la fecha del reporte y los días que lleva sin arreglarse. Al alejar el zoom se agrupan con números.
+5. Cuando se arregla, el admin lo marca como **Arreglado** (desde el panel, con fecha, o desde el globo del mapa). Se guarda la fecha y se muestra cuántos días tardó; se ven con el filtro "Arreglados".
 
 ### Protecciones
 
