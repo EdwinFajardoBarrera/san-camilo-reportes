@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login, type LoginState } from "./actions";
 
@@ -20,6 +21,9 @@ export function LoginForm() {
       <button type="submit" className="btn btn--primary" disabled={pending}>
         {pending ? "Entrando…" : "Entrar"}
       </button>
+      <Link href="/" className="btn btn--ghost login__back">
+        ← Ir al mapa público
+      </Link>
     </form>
   );
 }
