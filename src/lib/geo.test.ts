@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NEIGHBORHOOD } from "./config";
-import { clipLinesToPolygon, distanceToLine, isPointInPolygon, paddedBounds, pathLength, representativePoint, type Line } from "./geo";
+import { clipLinesToPolygon, distanceToLine, isPointInPolygon, paddedBounds, pathLength, representativePoint, type Line, nearestPointOnLines } from "./geo";
 
 describe("isPointInPolygon", () => {
   const poly = NEIGHBORHOOD.polygon;
@@ -58,5 +58,22 @@ describe("líneas", () => {
   it("elige un punto representativo dentro de la colonia", () => {
     expect(representativePoint([street], NEIGHBORHOOD.polygon)).toEqual([20.972, -89.555]);
     expect(representativePoint([[[-89.6, 20.9], [-89.59, 20.9]]], NEIGHBORHOOD.polygon)).toBeNull();
+  });
+});
+
+describe("nearestPointOnLines", () => {
+  it("proyecta el punto sobre la calle más cercana", () => {
+    const street: [number, number][] = [
+      [-89.555, 20.97],
+      [-89.553, 20.97],
+    ];
+    const near = nearestPointOnLines([20.9701, -89.554], [street]);
+    expect(near?.point[0]).toBeCloseTo(20.97, 6);
+    expect(near?.point[1]).toBeCloseTo(-89.554, 6);
+    expect(near?.distance).toBeCloseTo(11.1, 0);
+  });
+
+  it("sin líneas no hay punto", () => {
+    expect(nearestPointOnLines([20.97, -89.554], [])).toBeNull();
   });
 });

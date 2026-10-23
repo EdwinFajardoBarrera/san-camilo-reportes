@@ -53,6 +53,27 @@ export function distanceToLine([lat, lng]: LatLng, line: Line): number {
   return best;
 }
 
+/** Punto más cercano de un conjunto de líneas, con su distancia en metros. */
+export function nearestPointOnLines(point: LatLng, lines: Line[]): { point: LatLng; distance: number } | null {
+  const [lat, lng] = point;
+  const p = toMeters([lng, lat], lat);
+  let best: { point: LatLng; distance: number } | null = null;
+  for (const line of lines) {
+    for (let i = 1; i < line.length; i++) {
+      const [a, b] = [line[i - 1], line[i]];
+      const [ma, mb] = [toMeters(a, lat), toMeters(b, lat)];
+      const [dx, dy] = [mb[0] - ma[0], mb[1] - ma[1]];
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - ma[0]) * dx + (p[1] - ma[1]) * dy) / len2));
+      const distance = Math.hypot(p[0] - (ma[0] + t * dx), p[1] - (ma[1] + t * dy));
+      if (!best || distance < best.distance) {
+        best = { point: [a[1] + t * (b[1] - a[1]), a[0] + t * (b[0] - a[0])], distance };
+      }
+    }
+  }
+  return best;
+}
+
 /** Longitud total en metros. */
 export function pathLength(lines: Line[]): number {
   let total = 0;

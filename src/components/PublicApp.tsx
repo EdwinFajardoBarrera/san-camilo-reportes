@@ -9,6 +9,7 @@ import type { Report } from "@/lib/types";
 import { ReportMap } from "./MapLoader";
 import type { MapApi } from "./ReportMap";
 import { ReportForm, type StreetSelection } from "./ReportForm";
+import { useUserLocation, type UserLocation } from "./useUserLocation";
 
 /**
  * Flujo de reporte pensado para el celular:
@@ -53,7 +54,8 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   const [street, setStreet] = useState<StreetSelection | null>(null);
   const [manualLine, setManualLine] = useState<Line>([]);
   const [locateError, setLocateError] = useState<string | null>(null);
-  const [locating, setLocating] = useState(false);
+  const { location: userLocation, status: locationStatus, start: startLocation } = useUserLocation();
+  const locating = locationStatus === "searching";
   const [notice, setNotice] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
@@ -145,10 +147,19 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   function confirmLocation() {
     const api = mapApi.current;
     if (!api) return;
-    const point = api.getCenter();
+    let point = api.getCenter();
     if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) {
       setLocateError(`Ese punto está fuera de ${NEIGHBORHOOD.name}. Mueve el mapa al área marcada.`);
       return;
+    }
+    if (!isStreet) {
+      // El problema debe estar en la calle: se acomoda el pin sobre la más cercana.
+      const onStreet = api.snapToStreet(point);
+      if (!onStreet) {
+        setLocateError("La mira no está sobre una calle. Muévela hasta la calle donde está el problema.");
+        return;
+      }
+      point = onStreet;
     }
     if (isStreet) {
       const found = api.detectStreet(point);
@@ -163,29 +174,33 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
     setMode("form");
   }
 
-  function useMyLocation() {
-    if (!navigator.geolocation) {
-      setLocateError("Tu celular no permite obtener la ubicación.");
-      return;
+  /** Centra el mapa en el punto azul si está dentro de la colonia. */
+  function flyToLocation(loc: UserLocation): boolean {
+    const point: LatLng = [loc.lat, loc.lng];
+    if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) return false;
+    mapApi.current?.flyTo(point, Math.max(mapApi.current.getZoom(), 17));
+    return true;
+  }
+
+  function locationProblem(): string {
+    if (locationStatus === "denied")
+      return "No diste permiso de ubicación. Actívalo en los ajustes del navegador o mueve el mapa a mano.";
+    return "No pudimos obtener tu ubicación. Mueve el mapa hasta el problema.";
+  }
+
+  async function useMyLocation() {
+    const loc = userLocation ?? (await startLocation());
+    if (!loc) return setLocateError(locationProblem());
+    if (!flyToLocation(loc)) {
+      return setLocateError(`Parece que no estás en ${NEIGHBORHOOD.name}. Mueve el mapa hasta el problema.`);
     }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        const point: LatLng = [pos.coords.latitude, pos.coords.longitude];
-        if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) {
-          setLocateError(`Parece que no estás en ${NEIGHBORHOOD.name}. Mueve el mapa hasta el problema.`);
-          return;
-        }
-        setLocateError(null);
-        mapApi.current?.flyTo(point);
-      },
-      () => {
-        setLocating(false);
-        setLocateError("No pudimos obtener tu ubicación. Mueve el mapa hasta el problema.");
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    setLocateError(null);
+  }
+
+  async function showMyLocation() {
+    const loc = userLocation ?? (await startLocation());
+    if (!loc) return setNotice(locationProblem());
+    if (!flyToLocation(loc)) setNotice(`Parece que no estás en ${NEIGHBORHOOD.name}.`);
   }
 
   function startDrawing() {
@@ -269,6 +284,7 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
         onSupport={handleSupport}
         hasSupported={(id) => readSupported().has(id)}
         padding={MAP_PADDING}
+        userLocation={userLocation}
       />
 
       <div className="overlay-top">
@@ -331,6 +347,24 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
           </div>
         )}
       </div>
+
+      {mode === "view" && (
+        <button
+          type="button"
+          className="locate-me"
+          aria-label="Mostrar mi ubicación"
+          aria-pressed={locationStatus === "on"}
+          onClick={showMyLocation}
+          disabled={locating}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"
+            />
+          </svg>
+        </button>
+      )}
 
       {mode === "view" && (
         <button type="button" className="btn btn--primary fab" onClick={startReport}>

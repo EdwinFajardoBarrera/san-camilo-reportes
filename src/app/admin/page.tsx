@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ReportMap } from "@/components/MapLoader";
 import { isAdmin } from "@/lib/auth";
 import { CATEGORIES, STATUSES, STATUS_LABELS, categoryConfig, type Status } from "@/lib/config";
 import { groupNearby, nearbyPublished } from "@/lib/duplicates";
@@ -9,6 +8,7 @@ import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } fro
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
 import { changeStatus, logout, removeAllRejected, removeReport } from "./actions";
 import { ConfirmButton } from "./ConfirmButton";
+import { AdminMap } from "./AdminMap";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +86,13 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
   const cat = CATEGORIES[report.category];
   const osm = `https://www.openstreetmap.org/?mlat=${report.lat}&mlon=${report.lng}#map=19/${report.lat}/${report.lng}`;
   return (
-    <li className="card report" style={{ "--chip-color": cat.color } as React.CSSProperties}>
+    <li
+      className="card report"
+      data-report-id={report.id}
+      tabIndex={0}
+      title="Ver en el mapa"
+      style={{ "--chip-color": cat.color } as React.CSSProperties}
+    >
       <div className="report__head">
         <strong>
           {cat.icon} {cat.label}
@@ -182,9 +188,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </nav>
 
       <div className="admin__body">
-        <section className="admin__map">
-          <ReportMap reports={reports} showStatus />
-        </section>
+        <AdminMap reports={reports} />
         <section className="admin__list">
           {status === "rechazado" && reports.length > 0 && (
             <form action={removeAllRejected} className="bulk-bar">
