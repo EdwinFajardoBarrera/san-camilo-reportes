@@ -298,14 +298,17 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
               {visible.length} {visible.length === 1 ? "problema" : "problemas"} en el mapa · {NEIGHBORHOOD.city}
             </p>
           </div>
-          <a className="icon-link" href="/admin" aria-label="Panel de administración" title="Administración">
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-              <path
-                fill="currentColor"
-                d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z"
-              />
-            </svg>
-          </a>
+          {/* Solo para el administrador ya autenticado; para entrar se va directo a /admin. */}
+          {isAdmin && (
+            <a className="icon-link" href="/admin" aria-label="Panel de administración" title="Administración">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+                <path
+                  fill="currentColor"
+                  d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z"
+                />
+              </svg>
+            </a>
+          )}
         </header>
 
         {!reporting && (
