@@ -1,5 +1,6 @@
 // Aplica en orden las migraciones de db/migrations que aún no se han ejecutado.
 // Uso: npm run db:migrate   (npm run db:seed además carga db/seed.sql)
+// `npm run build` también lo ejecuta, así cada deploy de Vercel deja la base al día.
 // Neon recomienda migrar con la conexión directa (sin "-pooler"), por eso se
 // prefiere DATABASE_URL_UNPOOLED cuando existe.
 import { readdir, readFile } from "node:fs/promises";
@@ -10,6 +11,11 @@ import pg from "pg";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const connectionString = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!connectionString) {
+  // En CI no hay base de datos: con --if-configured el build sigue sin migrar.
+  if (process.argv.includes("--if-configured")) {
+    console.log("Sin DATABASE_URL: se omiten las migraciones.");
+    process.exit(0);
+  }
   console.error("Falta la variable DATABASE_URL (o DATABASE_URL_UNPOOLED).");
   process.exit(1);
 }

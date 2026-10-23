@@ -1,6 +1,7 @@
 import "server-only";
 import { query } from "./db";
 import { PUBLIC_STATUSES, REPORT_RATE_LIMIT, type Category, type Status } from "./config";
+import type { Line } from "./geo";
 import type { Report } from "./types";
 import type { NewReport } from "./validation";
 
@@ -16,6 +17,9 @@ type Row = {
   lng: number;
   created_at: Date;
   resolved_at: Date | null;
+  path: Line[] | null;
+  photo_url: string | null;
+  support_count: number;
 };
 
 const toReport = (r: Row): Report => ({
@@ -28,9 +32,13 @@ const toReport = (r: Row): Report => ({
   lng: r.lng,
   createdAt: r.created_at.toISOString(),
   resolvedAt: r.resolved_at?.toISOString() ?? null,
+  path: r.path,
+  photoUrl: r.photo_url,
+  supportCount: r.support_count,
 });
 
-const COLUMNS = "id, category, status, description, reference, lat, lng, created_at, resolved_at";
+const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url,
+  (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count`;
 
 export async function listPublicReports(): Promise<Report[]> {
   const rows = await query<Row>(
@@ -69,32 +77,71 @@ export async function recentReportsBy(reporterHash: string): Promise<number> {
   return n;
 }
 
-export async function createReport(input: NewReport, reporterHash: string): Promise<string> {
+export async function createReport(
+  input: NewReport,
+  reporterHash: string,
+  photoUrl: string | null = null,
+): Promise<string> {
   const [{ id }] = await query<{ id: string }>(
-    `INSERT INTO reports (category, description, reference, lat, lng, reporter_hash)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [input.category, input.description, input.reference, input.lat, input.lng, reporterHash],
+    `INSERT INTO reports (category, description, reference, lat, lng, path, photo_url, reporter_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [
+      input.category,
+      input.description,
+      input.reference,
+      input.lat,
+      input.lng,
+      input.path ? JSON.stringify(input.path) : null,
+      photoUrl,
+      reporterHash,
+    ],
   );
   return id;
 }
 
 /**
  * Cambia el estado de un reporte. Al marcarlo como arreglado se guarda la fecha
- * indicada (o la actual); nunca antes de la fecha del reporte.
+ * indicada (o la actual); nunca antes de la fecha del reporte. Al rechazarlo se
+ * quita la foto. Devuelve la URL de la foto que haya que borrar del almacenamiento.
  */
-export async function setReportStatus(id: string, status: Status, resolvedAt?: Date): Promise<void> {
+export async function setReportStatus(id: string, status: Status, resolvedAt?: Date): Promise<string | null> {
   const reviewed = status === "aprobado" || status === "rechazado";
   const resolved = status === "resuelto";
-  await query(
-    `UPDATE reports SET
+  const rejected = status === "rechazado";
+  const rows = await query<{ removed_photo: string | null }>(
+    `WITH old AS (SELECT photo_url FROM reports WHERE id = $1)
+     UPDATE reports SET
        status = $2,
        reviewed_at = CASE WHEN $3 THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END,
-       resolved_at = CASE WHEN $4 THEN GREATEST(created_at, COALESCE($5::timestamptz, now())) ELSE NULL END
-     WHERE id = $1`,
-    [id, status, reviewed, resolved, resolvedAt ?? null],
+       resolved_at = CASE WHEN $4 THEN GREATEST(created_at, COALESCE($5::timestamptz, now())) ELSE NULL END,
+       photo_url = CASE WHEN $6 THEN NULL ELSE photo_url END
+     WHERE id = $1
+     RETURNING CASE WHEN $6 THEN (SELECT photo_url FROM old) END AS removed_photo`,
+    [id, status, reviewed, resolved, resolvedAt ?? null, rejected],
   );
+  return rows[0]?.removed_photo ?? null;
 }
 
-export async function deleteReport(id: string): Promise<void> {
-  await query("DELETE FROM reports WHERE id = $1", [id]);
+/** Borra el reporte y devuelve la URL de su foto, si tenía. */
+export async function deleteReport(id: string): Promise<string | null> {
+  const rows = await query<{ photo_url: string | null }>("DELETE FROM reports WHERE id = $1 RETURNING photo_url", [id]);
+  return rows[0]?.photo_url ?? null;
+}
+
+/**
+ * Registra el apoyo de un vecino (uno por persona) a un reporte aprobado de una
+ * categoría que lo permite. Devuelve el total, o null si no se puede apoyar.
+ */
+export async function addSupport(reportId: string, supporterHash: string, categories: Category[]): Promise<number | null> {
+  const [report] = await query<{ id: string }>(
+    "SELECT id FROM reports WHERE id = $1 AND status = 'aprobado' AND category = ANY($2)",
+    [reportId, categories],
+  );
+  if (!report) return null;
+  await query(
+    "INSERT INTO supports (report_id, supporter_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    [reportId, supporterHash],
+  );
+  const [{ n }] = await query<{ n: number }>("SELECT count(*)::int AS n FROM supports WHERE report_id = $1", [reportId]);
+  return n;
 }

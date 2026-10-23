@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NEIGHBORHOOD } from "./config";
-import { isPointInPolygon, paddedBounds } from "./geo";
+import { clipLinesToPolygon, distanceToLine, isPointInPolygon, paddedBounds, pathLength, representativePoint, type Line } from "./geo";
 
 describe("isPointInPolygon", () => {
   const poly = NEIGHBORHOOD.polygon;
@@ -26,5 +26,37 @@ describe("paddedBounds", () => {
       expect(lng).toBeGreaterThan(w);
       expect(lng).toBeLessThan(e);
     }
+  });
+});
+
+describe("líneas", () => {
+  // Calle horizontal que entra y sale de la colonia.
+  const street: Line = [
+    [-89.58, 20.972],
+    [-89.56, 20.972],
+    [-89.555, 20.972],
+    [-89.55, 20.972],
+    [-89.52, 20.972],
+  ];
+
+  it("recorta al polígono y quita duplicados", () => {
+    const clipped = clipLinesToPolygon([street, street], NEIGHBORHOOD.polygon);
+    expect(clipped).toEqual([[[-89.56, 20.972], [-89.555, 20.972], [-89.55, 20.972]]]);
+  });
+
+  it("descarta líneas fuera de la colonia", () => {
+    expect(clipLinesToPolygon([[[-89.6, 20.9], [-89.59, 20.9]]], NEIGHBORHOOD.polygon)).toEqual([]);
+  });
+
+  it("mide distancias y longitudes en metros", () => {
+    // ~111 m por milésima de grado de latitud.
+    expect(distanceToLine([20.973, -89.555], street)).toBeGreaterThan(105);
+    expect(distanceToLine([20.973, -89.555], street)).toBeLessThan(115);
+    expect(pathLength([[[-89.555, 20.97], [-89.555, 20.971]]])).toBeCloseTo(111.3, 0);
+  });
+
+  it("elige un punto representativo dentro de la colonia", () => {
+    expect(representativePoint([street], NEIGHBORHOOD.polygon)).toEqual([20.972, -89.555]);
+    expect(representativePoint([[[-89.6, 20.9], [-89.59, 20.9]]], NEIGHBORHOOD.polygon)).toBeNull();
   });
 });

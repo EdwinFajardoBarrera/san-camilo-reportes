@@ -15,17 +15,23 @@ Cualquiera puede ver el mapa y enviar un reporte tocando el punto donde está el
 | --- | --- | --- |
 | Aplicación web (frontend + API) | [Next.js](https://nextjs.org) 15, React 19, TypeScript | Gratis (Vercel Hobby) |
 | Mapa | [MapLibre GL JS](https://maplibre.org) + mapa vectorial de [OpenFreeMap](https://openfreemap.org) (datos de OpenStreetMap) | Gratis, sin API key ni límites |
+| Fotos | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) (comprimidas a ~200 KB en el teléfono) | Gratis (plan Hobby) |
 | Base de datos | PostgreSQL ([Neon](https://neon.tech), plan gratuito) con `pg` + `attachDatabasePool` de Vercel | Gratis |
 
-Todo es software libre. No se guardan imágenes ni datos personales: la IP solo se guarda como hash irreversible para limitar envíos abusivos.
+Todo es software libre. No se guardan datos personales: la IP solo se guarda como hash irreversible para limitar envíos abusivos y contar apoyos una vez por persona. Las fotos se comprimen en el teléfono antes de subirse y se borran si el reporte se rechaza o elimina.
 
 ### Flujo de un reporte
 
-1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle y una descripción.
+1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle, una descripción y agrega una foto. Para **calles sin pavimentar** se marca la calle completa: al tocarla se dibuja sola con los datos de OpenStreetMap, o se traza a mano punto por punto.
 2. El reporte se guarda como **Pendiente**.
 3. El administrador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
 4. Los aprobados aparecen en el mapa público, con la fecha del reporte y los días que lleva sin arreglarse. Al alejar el zoom se agrupan con números.
 5. Cuando se arregla, el admin lo marca como **Arreglado** (desde el panel, con fecha, o desde el globo del mapa). Se guarda la fecha y se muestra cuántos días tardó; se ven con el filtro "Arreglados".
+
+### Apoyos y duplicados
+
+- En las calles sin pavimentar, los vecinos pueden tocar **"Apoyo la pavimentación"** (cuenta una vez por persona).
+- En `/admin`, los reportes pendientes muy cercanos y de la misma categoría se agrupan, y se avisa si ya existe uno publicado cerca, para rechazar duplicados.
 
 ### Protecciones
 
@@ -90,7 +96,13 @@ Comandos útiles: `npm run lint`, `npm run typecheck`, `npm test`, `npm run buil
 
 4. **Deploy**. En un minuto tendrás una URL como `san-camilo-reportes.vercel.app`.
 
-Cada `git push` a `main` vuelve a desplegar automáticamente. Si cambias el esquema, agrega una nueva migración en `db/migrations/` (p. ej. `002_algo.sql`) y ejecuta `npm run db:migrate` contra Neon.
+### 3. Fotos con Vercel Blob
+
+En Vercel: tu proyecto → **Storage** → **Create** → **Blob** → conéctalo al proyecto (entornos Production y Preview). Vercel agrega sola la variable `BLOB_READ_WRITE_TOKEN`. Después haz **Redeploy**. Sin esa variable la app funciona igual, solo oculta el campo de foto.
+
+### Migraciones
+
+`npm run build` aplica las migraciones pendientes antes de compilar, así que cada deploy de Vercel deja la base al día. Si cambias el esquema, agrega un archivo nuevo en `db/migrations/` (p. ej. `003_algo.sql`). Localmente puedes correr `npm run db:migrate`.
 
 ## Ideas para crecer
 

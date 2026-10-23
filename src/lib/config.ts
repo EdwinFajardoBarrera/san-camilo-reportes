@@ -25,14 +25,31 @@ export const NEIGHBORHOOD = {
  */
 export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
+type CategoryConfig = {
+  label: string;
+  color: string;
+  icon: string;
+  /** Se reporta trazando la calle en lugar de un solo punto. */
+  isStreet?: boolean;
+  /** Los vecinos pueden apoyar la iniciativa (p. ej. pavimentar). */
+  supportLabel?: string;
+};
+
 export const CATEGORIES = {
   bache: { label: "Bache", color: "#dc2626", icon: "🕳️" },
   alumbrado: { label: "Alumbrado público", color: "#ca8a04", icon: "💡" },
   inundacion: { label: "Calle inundada", color: "#2563eb", icon: "🌊" },
-  sin_pavimentar: { label: "Calle sin pavimentar", color: "#78716c", icon: "🚧" },
-} as const;
+  sin_pavimentar: {
+    label: "Calle sin pavimentar",
+    color: "#78716c",
+    icon: "🚧",
+    isStreet: true,
+    supportLabel: "Apoyo la pavimentación",
+  },
+} as const satisfies Record<string, CategoryConfig>;
 
 export type Category = keyof typeof CATEGORIES;
+export const categoryConfig = (c: Category): CategoryConfig => CATEGORIES[c];
 export const CATEGORY_KEYS = Object.keys(CATEGORIES) as Category[];
 
 export const STATUSES = ["pendiente", "aprobado", "rechazado", "resuelto"] as const;
@@ -52,3 +69,6 @@ export const PUBLIC_STATUSES: Status[] = ["aprobado", "resuelto"];
 export const REPORT_RATE_LIMIT = { max: 5, windowMinutes: 60 };
 /** Máximo de intentos fallidos de acceso al panel. */
 export const LOGIN_RATE_LIMIT = { max: 5, windowMinutes: 15 };
+
+/** Fotos: tamaño máximo aceptado (ya comprimidas en el navegador) y dimensión mayor. */
+export const PHOTO = { maxBytes: 1_000_000, maxDimension: 1280, quality: 0.72 };

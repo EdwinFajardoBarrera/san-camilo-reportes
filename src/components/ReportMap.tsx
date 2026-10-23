@@ -7,20 +7,32 @@ import maplibregl, {
   type MapGeoJSONFeature,
   type Map as MapLibreMap,
 } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { CATEGORY_KEYS, MAP_STYLE_URL, NEIGHBORHOOD, type LatLng } from "@/lib/config";
-import { paddedBounds } from "@/lib/geo";
+import { clipLinesToPolygon, distanceToLine, paddedBounds, type Line } from "@/lib/geo";
 import { pinImageId, pinSvg } from "@/lib/pins";
 import type { Report } from "@/lib/types";
 import { popupContent } from "./popup";
 
+/** Funciones del mapa que usa el formulario. */
+export type MapApi = {
+  /** Busca la calle más cercana al punto y devuelve su trazo dentro de la colonia. */
+  detectStreet: (point: LatLng) => { name: string | null; lines: Line[] } | null;
+};
+
 type Props = {
   reports: Report[];
   draft?: LatLng | null;
+  /** Trazo de la calle que se está reportando. */
+  draftPath?: Line[] | null;
+  apiRef?: RefObject<MapApi | null>;
   onPick?: (point: LatLng) => void;
   showStatus?: boolean;
   /** Solo para el admin: marcar como arreglado desde el globo. */
   onMarkFixed?: (id: string) => Promise<void>;
+  /** Apoyar una iniciativa; devuelve el nuevo total. */
+  onSupport?: (id: string) => Promise<number>;
+  hasSupported?: (id: string) => boolean;
   /** Espacio que tapan los paneles flotantes, para encuadrar la colonia. */
   padding?: { top: number; bottom: number; left: number; right: number };
 };
@@ -71,6 +83,71 @@ function toFeatures(reports: Report[]): GeoJSON.FeatureCollection<GeoJSON.Point>
   };
 }
 
+function toLines(reports: Report[]): GeoJSON.FeatureCollection<GeoJSON.MultiLineString> {
+  return {
+    type: "FeatureCollection",
+    features: reports
+      .filter((r) => r.path)
+      .map((r) => ({
+        type: "Feature",
+        geometry: { type: "MultiLineString", coordinates: r.path! },
+        properties: { id: r.id, resolved: r.status === "resuelto" },
+      })),
+  };
+}
+
+/** Trazo en edición: la línea y, si son pocos, sus vértices. */
+function draftFeatures(lines: Line[] | null | undefined): GeoJSON.FeatureCollection {
+  const coords = lines ?? [];
+  const vertices = coords.flat();
+  return {
+    type: "FeatureCollection",
+    features: [
+      { type: "Feature", geometry: { type: "MultiLineString", coordinates: coords }, properties: {} },
+      ...(vertices.length <= 60
+        ? [{ type: "Feature" as const, geometry: { type: "MultiPoint" as const, coordinates: vertices }, properties: {} }]
+        : []),
+    ],
+  };
+}
+
+/** Calles del mapa base (esquema OpenMapTiles) cerca de un punto, dentro de la colonia. */
+function findStreet(map: MapLibreMap, point: LatLng): { name: string | null; lines: Line[] } | null {
+  const sources = Object.entries(map.getStyle().sources)
+    .filter(([, s]) => s.type === "vector")
+    .map(([id]) => id);
+  type Candidate = { name: string | null; lines: Line[]; distance: number; source: string };
+  const asLines = (g: GeoJSON.Geometry): Line[] =>
+    g.type === "LineString" ? [g.coordinates as Line] : g.type === "MultiLineString" ? (g.coordinates as Line[]) : [];
+
+  let best: Candidate | null = null;
+  for (const source of sources) {
+    for (const sourceLayer of ["transportation_name", "transportation"]) {
+      for (const f of map.querySourceFeatures(source, { sourceLayer })) {
+        const lines = asLines(f.geometry);
+        if (lines.length === 0) continue;
+        const distance = Math.min(...lines.map((l) => distanceToLine(point, l)));
+        // Preferir calles con nombre (para juntar todos sus tramos).
+        const name = (f.properties?.name as string | undefined) || null;
+        const score = distance - (name ? 3 : 0);
+        if (distance <= 30 && (!best || score < best.distance - (best.name ? 3 : 0))) {
+          best = { name, lines, distance, source };
+        }
+      }
+    }
+  }
+  if (!best) return null;
+
+  let lines = best.lines;
+  if (best.name) {
+    lines = map
+      .querySourceFeatures(best.source, { sourceLayer: "transportation_name", filter: ["==", ["get", "name"], best.name] })
+      .flatMap((f) => asLines(f.geometry));
+  }
+  const clipped = clipLinesToPolygon(lines, NEIGHBORHOOD.polygon);
+  return clipped.length ? { name: best.name, lines: clipped } : null;
+}
+
 function loadImage(svg: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -90,7 +167,18 @@ async function addPinImages(map: MapLibreMap) {
   );
 }
 
-export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFixed, padding }: Props) {
+export function ReportMap({
+  reports,
+  draft,
+  draftPath,
+  apiRef,
+  onPick,
+  showStatus = false,
+  onMarkFixed,
+  onSupport,
+  hasSupported,
+  padding,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const draftMarker = useRef<maplibregl.Marker | null>(null);
@@ -99,11 +187,11 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
   // Refs para que los manejadores de eventos vean siempre los valores actuales.
   const onPickRef = useRef(onPick);
   const reportsRef = useRef(reports);
-  const popupOptions = useRef({ showStatus, onMarkFixed });
+  const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported });
   useEffect(() => {
     onPickRef.current = onPick;
     reportsRef.current = reports;
-    popupOptions.current = { showStatus, onMarkFixed };
+    popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported };
   });
 
   // Crear el mapa una sola vez.
@@ -126,6 +214,7 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
+    if (apiRef) apiRef.current = { detectStreet: (point) => findStreet(map, point) };
 
     map.on("load", async () => {
       await addPinImages(map);
@@ -142,6 +231,43 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
         type: "line",
         source: "outside",
         paint: { "line-color": BRAND, "line-width": 2.5, "line-opacity": 0.8 },
+      });
+
+      map.addSource("street-lines", { type: "geojson", data: toLines(reportsRef.current) });
+      map.addLayer({
+        id: "street-lines-casing",
+        type: "line",
+        source: "street-lines",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#fff", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 4, 18, 12] },
+      });
+      map.addLayer({
+        id: "street-lines",
+        type: "line",
+        source: "street-lines",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["case", ["get", "resolved"], "#16a34a", "#78716c"],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 18, 8],
+          "line-opacity": 0.9,
+        },
+      });
+
+      map.addSource("draft-path", { type: "geojson", data: draftFeatures(null) });
+      map.addLayer({
+        id: "draft-path",
+        type: "line",
+        source: "draft-path",
+        filter: ["==", ["geometry-type"], "MultiLineString"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": BRAND, "line-width": 6, "line-dasharray": [1.5, 1] },
+      });
+      map.addLayer({
+        id: "draft-path-points",
+        type: "circle",
+        source: "draft-path",
+        filter: ["==", ["geometry-type"], "MultiPoint"],
+        paint: { "circle-radius": 4, "circle-color": "#fff", "circle-stroke-color": BRAND, "circle-stroke-width": 2 },
       });
 
       map.addSource("reports", {
@@ -202,26 +328,48 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
       map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: (zoom ?? map.getZoom()) + 0.5 });
     });
 
+    const openPopup = (id: string, at: [number, number], offset: [number, number]) => {
+      const report = reportsRef.current.find((r) => r.id === id);
+      if (!report) return;
+      const popup = new maplibregl.Popup({ offset, maxWidth: "300px", closeButton: false });
+      const { showStatus, onMarkFixed, onSupport, hasSupported } = popupOptions.current;
+      const markFixed =
+        onMarkFixed &&
+        (async (reportId: string) => {
+          await onMarkFixed(reportId);
+          popup.remove();
+        });
+      popup
+        .setLngLat(at)
+        .setDOMContent(
+          popupContent(report, {
+            showStatus,
+            onMarkFixed: markFixed,
+            onSupport,
+            supported: hasSupported?.(report.id) ?? false,
+          }),
+        )
+        .addTo(map);
+    };
+
     map.on("click", "pins", (e) => {
       if (onPickRef.current) return;
       const feature = e.features?.[0];
-      const report = reportsRef.current.find((r) => r.id === feature?.properties.id);
-      if (!report) return;
-      const popup = new maplibregl.Popup({ offset: [0, -46], maxWidth: "300px", closeButton: false });
-      const { showStatus, onMarkFixed } = popupOptions.current;
-      const markFixed = onMarkFixed && (async (id: string) => {
-        await onMarkFixed(id);
-        popup.remove();
-      });
-      popup
-        .setLngLat([report.lng, report.lat])
-        .setDOMContent(popupContent(report, { showStatus, onMarkFixed: markFixed }))
-        .addTo(map);
+      if (feature?.geometry.type === "Point") {
+        openPopup(feature.properties.id, feature.geometry.coordinates as [number, number], [0, -46]);
+      }
+    });
+    map.on("click", "street-lines", (e) => {
+      if (onPickRef.current) return;
+      // Si el clic también cae en un pin, ese ya abrió su globo.
+      if (map.queryRenderedFeatures(e.point, { layers: ["pins", "clusters"] }).length) return;
+      const id = e.features?.[0]?.properties.id;
+      if (id) openPopup(id, [e.lngLat.lng, e.lngLat.lat], [0, -8]);
     });
 
     map.on("click", (e) => onPickRef.current?.([e.lngLat.lat, e.lngLat.lng]));
 
-    for (const layer of ["clusters", "pins"]) {
+    for (const layer of ["clusters", "pins", "street-lines"]) {
       map.on("mouseenter", layer, () => {
         if (!onPickRef.current) map.getCanvas().style.cursor = "pointer";
       });
@@ -231,6 +379,7 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
     }
 
     return () => {
+      if (apiRef) apiRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -242,7 +391,14 @@ export function ReportMap({ reports, draft, onPick, showStatus = false, onMarkFi
   useEffect(() => {
     if (!ready) return;
     mapRef.current?.getSource<GeoJSONSource>("reports")?.setData(toFeatures(reports));
+    mapRef.current?.getSource<GeoJSONSource>("street-lines")?.setData(toLines(reports));
   }, [ready, reports]);
+
+  // Trazo de la calle en edición.
+  useEffect(() => {
+    if (!ready) return;
+    mapRef.current?.getSource<GeoJSONSource>("draft-path")?.setData(draftFeatures(draftPath));
+  }, [ready, draftPath]);
 
   // Pin del reporte que se está creando.
   useEffect(() => {

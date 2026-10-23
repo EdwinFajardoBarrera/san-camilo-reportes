@@ -30,3 +30,29 @@ describe("newReportSchema", () => {
     expect(newReportSchema.safeParse({ ...base, website: "spam.com" }).success).toBe(false);
   });
 });
+
+describe("reportes de calles", () => {
+  const street = [
+    [-89.56, 20.972],
+    [-89.555, 20.972],
+    [-89.55, 20.972],
+  ];
+
+  it("exige el trazo de la calle", () => {
+    expect(newReportSchema.safeParse({ category: "sin_pavimentar", lat: 20.972, lng: -89.555 }).success).toBe(false);
+  });
+
+  it("calcula el punto del pin a partir del trazo", () => {
+    const r = newReportSchema.parse({ category: "sin_pavimentar", path: [street] });
+    expect([r.lat, r.lng]).toEqual([20.972, -89.555]);
+    expect(r.path).toHaveLength(1);
+  });
+
+  it("rechaza trazos lejos de la colonia", () => {
+    expect(newReportSchema.safeParse({ category: "sin_pavimentar", path: [[[-89.7, 20.9], [-89.69, 20.9]]] }).success).toBe(false);
+  });
+
+  it("ignora el trazo en reportes de un solo punto", () => {
+    expect(newReportSchema.parse({ ...base, path: [street] }).path).toBeNull();
+  });
+});

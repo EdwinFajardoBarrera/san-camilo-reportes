@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth";
 import { deleteReport, setReportStatus } from "@/lib/reports";
 import { getClientIp } from "@/lib/request";
+import { deletePhoto } from "@/lib/storage";
 
 export type LoginState = { error?: string };
 
@@ -61,7 +62,8 @@ export async function changeStatus(formData: FormData): Promise<void> {
     status: formData.get("status"),
     resolvedOn: formData.get("resolvedOn") ?? undefined,
   });
-  await setReportStatus(id, status, status === "resuelto" ? resolvedDate(resolvedOn) : undefined);
+  const removedPhoto = await setReportStatus(id, status, status === "resuelto" ? resolvedDate(resolvedOn) : undefined);
+  await deletePhoto(removedPhoto);
   revalidatePath("/");
   revalidatePath("/admin");
 }
@@ -77,7 +79,7 @@ export async function markFixed(id: string): Promise<void> {
 export async function removeReport(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = z.string().uuid().parse(formData.get("id"));
-  await deleteReport(id);
+  await deletePhoto(await deleteReport(id));
   revalidatePath("/");
   revalidatePath("/admin");
 }

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ReportMap } from "@/components/MapLoader";
 import { isAdmin } from "@/lib/auth";
-import { CATEGORIES, STATUSES, STATUS_LABELS, type Status } from "@/lib/config";
+import { CATEGORIES, STATUSES, STATUS_LABELS, categoryConfig, type Status } from "@/lib/config";
+import { groupNearby, nearbyPublished } from "@/lib/duplicates";
+import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
 import { changeStatus, logout, removeReport } from "./actions";
@@ -60,7 +62,26 @@ function ReportDates({ report }: { report: Report }) {
   );
 }
 
-function ReportCard({ report }: { report: Report }) {
+type Nearby = ReturnType<typeof nearbyPublished>;
+
+function NearbyWarning({ nearby }: { nearby: Nearby }) {
+  if (nearby.length === 0) return null;
+  return (
+    <div className="dup-warning">
+      <strong>Ya hay {nearby.length === 1 ? "un reporte publicado" : `${nearby.length} reportes publicados`} cerca:</strong>
+      <ul>
+        {nearby.slice(0, 3).map(({ report, meters }) => (
+          <li key={report.id}>
+            a {meters} m · {STATUS_LABELS[report.status].toLowerCase()} · reportado {agoLabel(daysBetween(report.createdAt))}
+            {report.reference && ` · ${report.reference}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }) {
   const cat = CATEGORIES[report.category];
   const osm = `https://www.openstreetmap.org/?mlat=${report.lat}&mlon=${report.lng}#map=19/${report.lat}/${report.lng}`;
   return (
@@ -71,6 +92,19 @@ function ReportCard({ report }: { report: Report }) {
         </strong>
       </div>
       <ReportDates report={report} />
+      <NearbyWarning nearby={nearby} />
+      {report.photoUrl && (
+        <a href={report.photoUrl} target="_blank" rel="noreferrer" className="report__photo">
+          {/* eslint-disable-next-line @next/next/no-img-element -- fotos ya comprimidas, servidas desde Blob */}
+          <img src={report.photoUrl} alt={`Foto del reporte: ${cat.label}`} loading="lazy" />
+        </a>
+      )}
+      {report.path && (
+        <p className="report__dates">
+          Calle marcada: ≈ {Math.round(pathLength(report.path))} m
+          {categoryConfig(report.category).supportLabel && ` · ${report.supportCount} apoyos`}
+        </p>
+      )}
       {report.reference && <p className="popup__ref">{report.reference}</p>}
       {report.description ? <p>{report.description}</p> : <p className="optional">Sin descripción</p>}
       <a href={osm} target="_blank" rel="noreferrer" className="link-muted">
@@ -111,7 +145,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   const { estado } = await searchParams;
   const status: Status = STATUSES.includes(estado as Status) ? (estado as Status) : "pendiente";
-  const [reports, counts] = await Promise.all([listReportsByStatus(status), countByStatus()]);
+  const [reports, counts, published] = await Promise.all([
+    listReportsByStatus(status),
+    countByStatus(),
+    // Para avisar si un pendiente repite algo ya publicado.
+    status === "pendiente"
+      ? Promise.all([listReportsByStatus("aprobado"), listReportsByStatus("resuelto")]).then((r) => r.flat())
+      : Promise.resolve([] as Report[]),
+  ]);
+  const groups = groupNearby(reports);
 
   return (
     <main className="admin">
@@ -146,9 +188,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <p className="empty">No hay reportes en «{STATUS_LABELS[status]}».</p>
           ) : (
             <ul>
-              {reports.map((r) => (
-                <ReportCard key={r.id} report={r} />
-              ))}
+              {groups.map((group) =>
+                group.length === 1 ? (
+                  <ReportCard key={group[0].id} report={group[0]} nearby={nearbyPublished(group[0], published)} />
+                ) : (
+                  <li key={group[0].id} className="dup-group">
+                    <p className="dup-group__title">
+                      ⚠️ {group.length} reportes de «{CATEGORIES[group[0].category].label}» muy cerca entre sí. Puede
+                      ser el mismo problema: aprueba uno y rechaza los repetidos.
+                    </p>
+                    <ul>
+                      {group.map((r) => (
+                        <ReportCard key={r.id} report={r} nearby={nearbyPublished(r, published)} />
+                      ))}
+                    </ul>
+                  </li>
+                ),
+              )}
             </ul>
           )}
         </section>

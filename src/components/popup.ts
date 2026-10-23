@@ -1,4 +1,4 @@
-import { CATEGORIES, STATUS_LABELS } from "@/lib/config";
+import { CATEGORIES, STATUS_LABELS, categoryConfig } from "@/lib/config";
 import { daysBetween, daysLabel, formatDate } from "@/lib/dates";
 import type { Report } from "@/lib/types";
 
@@ -6,6 +6,10 @@ type Options = {
   showStatus: boolean;
   /** Si existe, se muestra el botón para marcar como arreglado (solo admin). */
   onMarkFixed?: (id: string) => Promise<void>;
+  /** Apoyar la iniciativa; devuelve el nuevo total de apoyos. */
+  onSupport?: (id: string) => Promise<number>;
+  /** Si este navegador ya apoyó el reporte. */
+  supported?: boolean;
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
@@ -33,7 +37,7 @@ function ageClass(days: number) {
  * Contenido del globo de información. Se construye con textContent (no innerHTML)
  * porque la descripción la escriben los vecinos.
  */
-export function popupContent(report: Report, { showStatus, onMarkFixed }: Options): HTMLElement {
+export function popupContent(report: Report, { showStatus, onMarkFixed, onSupport, supported }: Options): HTMLElement {
   const cat = CATEGORIES[report.category];
   const fixed = report.status === "resuelto" && report.resolvedAt;
   const root = el("div", "popup");
@@ -43,6 +47,19 @@ export function popupContent(report: Report, { showStatus, onMarkFixed }: Option
   head.append(el("span", "popup__icon", cat.icon), el("strong", "popup__title", cat.label));
   if (showStatus || fixed) head.append(el("span", `badge badge--${report.status}`, STATUS_LABELS[report.status]));
   root.append(head);
+
+  if (report.photoUrl) {
+    const link = el("a", "popup__photo");
+    link.href = report.photoUrl;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    const img = el("img");
+    img.src = report.photoUrl;
+    img.alt = `Foto del reporte: ${cat.label}`;
+    img.loading = "lazy";
+    link.append(img);
+    root.append(link);
+  }
 
   if (report.reference) root.append(el("p", "popup__ref", report.reference));
   if (report.description) root.append(el("p", "popup__desc", report.description));
@@ -60,6 +77,39 @@ export function popupContent(report: Report, { showStatus, onMarkFixed }: Option
     facts.append(row("Sin arreglar", open === 0 ? "reportado hoy" : daysLabel(open), ageClass(open)));
   }
   root.append(facts);
+
+  const supportLabel = categoryConfig(report.category).supportLabel;
+  if (supportLabel) {
+    const box = el("div", "support");
+    const count = el("span", "support__count");
+    const setCount = (n: number) => {
+      count.textContent = n === 1 ? "1 vecino apoya" : `${n} vecinos apoyan`;
+    };
+    setCount(report.supportCount);
+    box.append(count);
+    if (onSupport && report.status === "aprobado") {
+      const button = el("button", "btn btn--support btn--small");
+      button.type = "button";
+      const markDone = () => {
+        button.disabled = true;
+        button.textContent = "✓ Ya apoyas";
+      };
+      if (supported) markDone();
+      else button.textContent = `👍 ${supportLabel}`;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          setCount(await onSupport(report.id));
+          markDone();
+        } catch {
+          button.disabled = false;
+          button.textContent = "No se pudo. Reintentar";
+        }
+      });
+      box.append(button);
+    }
+    root.append(box);
+  }
 
   if (onMarkFixed && report.status === "aprobado") {
     const button = el("button", "btn btn--primary btn--small", "Marcar como arreglado");

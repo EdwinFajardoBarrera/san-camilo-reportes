@@ -10,3 +10,6 @@ next-env.d.ts
 .DS_Store
 npm-debug.log*
 .neon
+
+# Fotos guardadas en desarrollo con STORAGE_DRIVER=local
+public/uploads/

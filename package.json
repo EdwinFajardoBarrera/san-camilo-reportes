@@ -4,7 +4,7 @@
   "description": "Mapa colaborativo de problemas urbanos en la colonia San Camilo, Mérida",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/migrate.mjs --if-configured && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@neon/config": "^1.9.3",
     "@neon/env": "^1.6.4",
+    "@vercel/blob": "^2.8.2",
     "@vercel/functions": "^3.10.3",
     "jose": "^5.10.0",
     "maplibre-gl": "^5.24.0",

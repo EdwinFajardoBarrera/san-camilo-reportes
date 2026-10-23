@@ -1,42 +1,93 @@
 "use client";
 
-import { useState } from "react";
-import { CATEGORIES, CATEGORY_KEYS, type Category, type LatLng } from "@/lib/config";
+import { useEffect, useState } from "react";
+import { CATEGORIES, CATEGORY_KEYS, categoryConfig, type Category, type LatLng } from "@/lib/config";
+import { pathLength, type Line } from "@/lib/geo";
+import { compressPhoto } from "@/lib/photo";
+
+export type StreetSelection = { name: string | null; lines: Line[]; manual: boolean };
 
 type Props = {
   point: LatLng;
-  onCancel: () => void;
+  category: Category | null;
+  onCategoryChange: (category: Category) => void;
+  street: StreetSelection | null;
+  streetError: string | null;
+  onDrawStreet: () => void;
   onRepick: () => void;
+  photosEnabled: boolean;
+  hidden: boolean;
+  onCancel: () => void;
   onSubmitted: () => void;
 };
 
-export function ReportForm({ point, onCancel, onRepick, onSubmitted }: Props) {
-  const [category, setCategory] = useState<Category | null>(null);
+export function ReportForm({
+  point,
+  category,
+  onCategoryChange,
+  street,
+  streetError,
+  onDrawStreet,
+  onRepick,
+  photosEnabled,
+  hidden,
+  onCancel,
+  onSubmitted,
+}: Props) {
+  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const isStreet = category ? (categoryConfig(category).isStreet ?? false) : false;
+
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
+
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setProcessing(true);
+    setError(null);
+    try {
+      const blob = await compressPhoto(file);
+      setPhoto(blob);
+      setPreview(URL.createObjectURL(blob));
+    } catch {
+      setError("No se pudo leer la foto. Prueba con otra.");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function removePhoto() {
+    setPhoto(null);
+    setPreview(null);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!category) {
-      setError("Elige qué tipo de problema es");
-      return;
+    if (!category) return setError("Elige qué tipo de problema es");
+    if (isStreet && !street) return setError("Marca la calle en el mapa");
+
+    const fields = new FormData(e.currentTarget);
+    const body = new FormData();
+    body.set("category", category);
+    if (isStreet && street) body.set("path", JSON.stringify(street.lines));
+    else {
+      body.set("lat", String(point[0]));
+      body.set("lng", String(point[1]));
     }
-    const form = new FormData(e.currentTarget);
+    for (const key of ["reference", "description", "website"]) {
+      const value = fields.get(key);
+      if (typeof value === "string" && value) body.set(key, value);
+    }
+    if (photo) body.set("photo", photo, "foto.jpg");
+
     setSending(true);
     setError(null);
     try {
-      const res = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          lat: point[0],
-          lng: point[1],
-          reference: form.get("reference") || undefined,
-          description: form.get("description") || undefined,
-          website: form.get("website") || undefined,
-        }),
-      });
+      const res = await fetch("/api/reports", { method: "POST", body });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "No se pudo enviar el reporte. Intenta de nuevo.");
@@ -51,10 +102,10 @@ export function ReportForm({ point, onCancel, onRepick, onSubmitted }: Props) {
   }
 
   return (
-    <form className="sheet" onSubmit={handleSubmit} aria-labelledby="form-title">
+    <form className={`sheet${hidden ? " sheet--hidden" : ""}`} onSubmit={handleSubmit} aria-labelledby="form-title">
       <div className="sheet__head">
         <h2 id="form-title">Nuevo reporte</h2>
-        <button type="button" className="btn btn--ghost" onClick={onRepick}>
+        <button type="button" className="btn btn--ghost btn--small" onClick={onRepick}>
           Mover punto
         </button>
       </div>
@@ -70,13 +121,34 @@ export function ReportForm({ point, onCancel, onRepick, onSubmitted }: Props) {
                 name="category"
                 value={key}
                 checked={category === key}
-                onChange={() => setCategory(key)}
+                onChange={() => onCategoryChange(key)}
               />
               <span aria-hidden>{cat.icon}</span> {cat.label}
             </label>
           );
         })}
       </fieldset>
+
+      {isStreet && (
+        <div className="street-box">
+          {street ? (
+            <p>
+              <strong>{street.manual ? "Calle trazada a mano" : (street.name ?? "Calle seleccionada")}</strong>
+              <span className="optional"> · ≈ {Math.round(pathLength(street.lines))} m marcados en el mapa</span>
+            </p>
+          ) : (
+            <p className="optional">{streetError ?? "Buscando la calle…"}</p>
+          )}
+          <div className="street-box__actions">
+            <button type="button" className="btn btn--ghost btn--small" onClick={onRepick}>
+              Elegir otra calle
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={onDrawStreet}>
+              ✏️ Trazar a mano
+            </button>
+          </div>
+        </div>
+      )}
 
       <label className="field">
         <span>
@@ -92,6 +164,28 @@ export function ReportForm({ point, onCancel, onRepick, onSubmitted }: Props) {
         <textarea name="description" maxLength={500} rows={3} placeholder="Ej. Bache grande, ocupa medio carril" />
       </label>
 
+      {photosEnabled && (
+        <div className="field">
+          <span>
+            Foto <span className="optional">(opcional)</span>
+          </span>
+          {preview ? (
+            <div className="photo-preview">
+              {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) */}
+              <img src={preview} alt="Vista previa de la foto" />
+              <button type="button" className="btn btn--ghost btn--small" onClick={removePhoto}>
+                Quitar foto
+              </button>
+            </div>
+          ) : (
+            <label className="photo-input">
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} disabled={processing} />
+              {processing ? "Procesando foto…" : "📷 Tomar o elegir foto"}
+            </label>
+          )}
+        </div>
+      )}
+
       {/* Campo trampa para bots: oculto para personas. */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="honeypot" aria-hidden />
 
@@ -105,7 +199,7 @@ export function ReportForm({ point, onCancel, onRepick, onSubmitted }: Props) {
         <button type="button" className="btn btn--ghost" onClick={onCancel} disabled={sending}>
           Cancelar
         </button>
-        <button type="submit" className="btn btn--primary" disabled={sending}>
+        <button type="submit" className="btn btn--primary" disabled={sending || processing}>
           {sending ? "Enviando…" : "Enviar reporte"}
         </button>
       </div>
