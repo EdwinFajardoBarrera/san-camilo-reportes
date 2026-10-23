@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { markFixed } from "@/app/admin/actions";
 import { CATEGORIES, CATEGORY_KEYS, NEIGHBORHOOD, categoryConfig, type Category, type LatLng } from "@/lib/config";
 import { isPointInPolygon, type Line } from "@/lib/geo";
@@ -20,6 +20,9 @@ type Mode = "view" | "choose" | "locate" | "form" | "draw";
 // Espacio que ocupan los paneles flotantes sobre el mapa.
 const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 const SUPPORTED_KEY = "sc-apoyos";
+
+/** Paso al que regresa el botón "atrás" del celular. */
+const PREVIOUS: Record<Mode, Mode> = { view: "view", choose: "view", locate: "choose", form: "locate", draw: "locate" };
 
 function readSupported(): Set<string> {
   try {
@@ -53,6 +56,43 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  const modeRef = useRef(mode);
+  const sentRef = useRef(sent);
+  useEffect(() => {
+    modeRef.current = mode;
+    sentRef.current = sent;
+  }, [mode, sent]);
+
+  // Mientras se reporta (o se ve el aviso de enviado) hay una entrada extra en el historial,
+  // así el botón "atrás" de Android regresa un paso en lugar de salir de la página.
+  const inFlow = mode !== "view" || sent;
+  useEffect(() => {
+    const marked = window.history.state?.scReport === true;
+    if (inFlow && !marked) window.history.pushState({ ...window.history.state, scReport: true }, "");
+    if (!inFlow && marked) window.history.back();
+  }, [inFlow, mode]);
+
+  useEffect(() => {
+    function onBack() {
+      if (sentRef.current) {
+        setSent(false);
+        return;
+      }
+      const prev = PREVIOUS[modeRef.current];
+      if (prev === modeRef.current) return;
+      if (prev === "view") {
+        setCategory(null);
+        setDraft(null);
+        setStreet(null);
+        setManualLine([]);
+      }
+      setLocateError(null);
+      setMode(prev);
+    }
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, []);
 
   const isStreet = category ? (categoryConfig(category).isStreet ?? false) : false;
 

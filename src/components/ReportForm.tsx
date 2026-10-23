@@ -129,9 +129,9 @@ export function ReportForm({
             </div>
           ) : (
             <label className="photo-input">
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} disabled={processing} />
+              <input type="file" accept="image/*" onChange={handlePhoto} disabled={processing} />
               <span aria-hidden>📷</span>
-              {processing ? "Procesando foto…" : "Tomar foto (opcional)"}
+              {processing ? "Procesando foto…" : "Agregar foto (opcional)"}
             </label>
           ))}
 
