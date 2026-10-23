@@ -56,3 +56,14 @@ describe("reportes de calles", () => {
     expect(newReportSchema.parse({ ...base, path: [street] }).path).toBeNull();
   });
 });
+
+describe("nombre del vecino", () => {
+  it("es opcional y se recorta", () => {
+    expect(newReportSchema.parse(base).reporterName).toBeNull();
+    expect(newReportSchema.parse({ ...base, reporterName: "  Edwin  " }).reporterName).toBe("Edwin");
+  });
+
+  it("limita el largo", () => {
+    expect(newReportSchema.safeParse({ ...base, reporterName: "a".repeat(61) }).success).toBe(false);
+  });
+});

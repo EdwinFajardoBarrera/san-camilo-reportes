@@ -92,6 +92,7 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
         </strong>
       </div>
       <ReportDates report={report} />
+      <p className="report__dates">Por: {report.reporterName ?? "anónimo"}</p>
       <NearbyWarning nearby={nearby} />
       {report.photoUrl && (
         <a href={report.photoUrl} target="_blank" rel="noreferrer" className="report__photo">

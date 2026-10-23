@@ -39,6 +39,7 @@ export function ReportForm({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [anonymous, setAnonymous] = useState(true);
   const isStreet = category ? (categoryConfig(category).isStreet ?? false) : false;
 
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
@@ -78,7 +79,8 @@ export function ReportForm({
       body.set("lat", String(point[0]));
       body.set("lng", String(point[1]));
     }
-    for (const key of ["reference", "description", "website"]) {
+    const keys = ["reference", "description", "website", ...(anonymous ? [] : ["reporterName"])];
+    for (const key of keys) {
       const value = fields.get(key);
       if (typeof value === "string" && value) body.set(key, value);
     }
@@ -186,6 +188,31 @@ export function ReportForm({
         </div>
       )}
 
+      <fieldset className="identity">
+        <legend>¿Quién reporta?</legend>
+        <div className="identity__options">
+          <label className="identity__option">
+            <input type="radio" name="identity" checked={anonymous} onChange={() => setAnonymous(true)} />
+            Anónimo
+          </label>
+          <label className="identity__option">
+            <input type="radio" name="identity" checked={!anonymous} onChange={() => setAnonymous(false)} />
+            Con mi nombre
+          </label>
+        </div>
+        {!anonymous && (
+          <input
+            name="reporterName"
+            className="identity__name"
+            maxLength={60}
+            required
+            autoComplete="name"
+            placeholder="Tu nombre como quieres que aparezca"
+            aria-label="Tu nombre"
+          />
+        )}
+      </fieldset>
+
       {/* Campo trampa para bots: oculto para personas. */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="honeypot" aria-hidden />
 
@@ -203,7 +230,10 @@ export function ReportForm({
           {sending ? "Enviando…" : "Enviar reporte"}
         </button>
       </div>
-      <p className="hint">Tu reporte se publicará después de ser revisado. No guardamos tu nombre.</p>
+      <p className="hint">
+        Tu reporte se publicará después de ser revisado.{" "}
+        {anonymous ? "No guardamos ningún dato tuyo." : "Tu nombre se mostrará junto al reporte."}
+      </p>
     </form>
   );
 }

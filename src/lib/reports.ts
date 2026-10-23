@@ -19,6 +19,7 @@ type Row = {
   resolved_at: Date | null;
   path: Line[] | null;
   photo_url: string | null;
+  reporter_name: string | null;
   support_count: number;
 };
 
@@ -34,10 +35,11 @@ const toReport = (r: Row): Report => ({
   resolvedAt: r.resolved_at?.toISOString() ?? null,
   path: r.path,
   photoUrl: r.photo_url,
+  reporterName: r.reporter_name,
   supportCount: r.support_count,
 });
 
-const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url,
+const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, reporter_name,
   (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count`;
 
 export async function listPublicReports(): Promise<Report[]> {
@@ -83,8 +85,8 @@ export async function createReport(
   photoUrl: string | null = null,
 ): Promise<string> {
   const [{ id }] = await query<{ id: string }>(
-    `INSERT INTO reports (category, description, reference, lat, lng, path, photo_url, reporter_hash)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    `INSERT INTO reports (category, description, reference, lat, lng, path, photo_url, reporter_name, reporter_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       input.category,
       input.description,
@@ -93,6 +95,7 @@ export async function createReport(
       input.lng,
       input.path ? JSON.stringify(input.path) : null,
       photoUrl,
+      input.reporterName,
       reporterHash,
     ],
   );

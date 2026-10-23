@@ -15,5 +15,7 @@ export type Report = {
   /** Trazo de la calle, si el reporte es de una calle completa. */
   path: Line[] | null;
   photoUrl: string | null;
+  /** Nombre que el vecino eligió mostrar; null si es anónimo. */
+  reporterName: string | null;
   supportCount: number;
 };

@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     path,
     description: text("description"),
     reference: text("reference"),
+    reporterName: text("reporterName"),
     website: text("website"),
   });
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? "Datos inválidos", 422);

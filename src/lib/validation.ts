@@ -29,6 +29,7 @@ export const newReportSchema = z
     path: pathSchema.optional(),
     description: optionalText(500),
     reference: optionalText(150),
+    reporterName: optionalText(60),
     // Campo trampa: los humanos no lo ven; si viene lleno es un bot.
     website: z.string().max(0, "Solicitud inválida").optional(),
   })
@@ -64,6 +65,7 @@ export const newReportSchema = z
       path,
       description: r.description,
       reference: r.reference,
+      reporterName: r.reporterName,
     };
   });
 

@@ -51,6 +51,7 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   const [draft, setDraft] = useState<LatLng | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
   const visible = useMemo(
     () => initialReports.filter((r) => active.has(r.category) && (showResolved || r.status !== "resuelto")),
@@ -156,7 +157,7 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   function submitted() {
     resetReport();
     setMode("view");
-    setNotice("¡Gracias! Tu reporte será revisado antes de aparecer en el mapa.");
+    setSent(true);
   }
 
   async function handleSupport(id: string): Promise<number> {
@@ -181,6 +182,7 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
         apiRef={mapApi}
         draft={isStreet ? null : draft}
         draftPath={mode === "draw" ? [manualLine] : isStreet ? street?.lines : null}
+        focusPath={mode === "form"}
         onPick={mode === "pick" || mode === "draw" ? pick : undefined}
         onMarkFixed={isAdmin ? handleMarkFixed : undefined}
         onSupport={handleSupport}
@@ -304,6 +306,31 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
         <button type="button" className="btn btn--primary fab" onClick={startReport}>
           <span aria-hidden>＋</span> Reportar problema
         </button>
+      )}
+
+      {sent && (
+        <div className="dialog-backdrop" onClick={() => setSent(false)}>
+          <div
+            className="dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="sent-title"
+            aria-describedby="sent-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dialog__icon" aria-hidden>
+              ✓
+            </div>
+            <h2 id="sent-title">¡Reporte enviado!</h2>
+            <p id="sent-desc">
+              Gracias por ayudar a la colonia. Tu reporte <strong>todavía no aparece en el mapa</strong>: primero lo
+              revisa el administrador y, en cuanto lo apruebe, será visible para todos.
+            </p>
+            <button type="button" className="btn btn--primary" onClick={() => setSent(false)} autoFocus>
+              Entendido
+            </button>
+          </div>
+        </div>
       )}
 
       {formOpen && draft && (

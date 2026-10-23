@@ -66,6 +66,7 @@ export function popupContent(report: Report, { showStatus, onMarkFixed, onSuppor
 
   const facts = el("div", "popup__facts");
   facts.append(row("Reportado", formatDate(report.createdAt)));
+  facts.append(row("Por", report.reporterName ?? "Vecino anónimo"));
   if (fixed) {
     const took = daysBetween(report.createdAt, report.resolvedAt!);
     facts.append(
