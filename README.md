@@ -15,7 +15,7 @@ Cualquiera puede ver el mapa y enviar un reporte tocando el punto donde está el
 | --- | --- | --- |
 | Aplicación web (frontend + API) | [Next.js](https://nextjs.org) 15, React 19, TypeScript | Gratis (Vercel Hobby) |
 | Mapa | [Leaflet](https://leafletjs.com) + mosaicos de [OpenStreetMap](https://www.openstreetmap.org) | Gratis, sin API key |
-| Base de datos | PostgreSQL ([Neon](https://neon.tech), plan gratuito) | Gratis |
+| Base de datos | PostgreSQL ([Neon](https://neon.tech), plan gratuito) con `pg` + `attachDatabasePool` de Vercel | Gratis |
 
 Todo es software libre. No se guardan imágenes ni datos personales: la IP solo se guarda como hash irreversible para limitar envíos abusivos.
 
@@ -44,6 +44,8 @@ src/components/     Mapa y formulario
 ```
 
 Para adaptar la app a otra colonia, basta con cambiar `src/lib/config.ts`.
+
+`neon.ts` declara los servicios de Neon del proyecto (solo Postgres). Las migraciones usan `DATABASE_URL_UNPOOLED` (conexión directa) si existe; la app usa `DATABASE_URL` (pooled).
 
 ## Desarrollo local
 

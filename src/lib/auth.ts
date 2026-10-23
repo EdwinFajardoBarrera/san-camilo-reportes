@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { db } from "./db";
+import { query } from "./db";
 import { LOGIN_RATE_LIMIT } from "./config";
 import { anonymize, getSessionSecret } from "./secrets";
 
@@ -19,19 +19,18 @@ export function passwordMatches(candidate: string): boolean {
 }
 
 export async function isLoginBlocked(ip: string): Promise<boolean> {
-  const sql = db();
-  const [{ n }] = await sql<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM login_attempts
-    WHERE ip_hash = ${anonymize(ip)}
-      AND created_at > now() - make_interval(mins => ${LOGIN_RATE_LIMIT.windowMinutes})`;
+  const [{ n }] = await query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM login_attempts
+     WHERE ip_hash = $1 AND created_at > now() - make_interval(mins => $2)`,
+    [anonymize(ip), LOGIN_RATE_LIMIT.windowMinutes],
+  );
   return n >= LOGIN_RATE_LIMIT.max;
 }
 
 export async function recordFailedLogin(ip: string): Promise<void> {
-  const sql = db();
-  await sql`INSERT INTO login_attempts (ip_hash) VALUES (${anonymize(ip)})`;
+  await query("INSERT INTO login_attempts (ip_hash) VALUES ($1)", [anonymize(ip)]);
   // Limpieza oportunista de registros viejos.
-  await sql`DELETE FROM login_attempts WHERE created_at < now() - interval '1 day'`;
+  await query("DELETE FROM login_attempts WHERE created_at < now() - interval '1 day'");
 }
 
 export async function startSession(): Promise<void> {

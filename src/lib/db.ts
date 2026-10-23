@@ -1,25 +1,33 @@
 import "server-only";
-import postgres from "postgres";
+import { attachDatabasePool } from "@vercel/functions";
+import { Pool, types, type QueryResultRow } from "pg";
+
+// count(*)::int y similares ya llegan como número; los float8 también.
+types.setTypeParser(types.builtins.FLOAT8, Number);
 
 declare global {
-  // Reutiliza la conexión entre invocaciones y recargas en desarrollo.
-  var __sql: postgres.Sql | undefined;
+  // Reutiliza el pool entre invocaciones y recargas en desarrollo.
+  var __pool: Pool | undefined;
 }
 
-function createClient() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("Falta la variable de entorno DATABASE_URL");
-  return postgres(url, {
-    // En serverless conviene pocas conexiones; el pooler de Neon hace el resto.
-    max: 3,
-    idle_timeout: 20,
-    // Los poolers en modo transacción no soportan sentencias preparadas.
-    prepare: false,
-  });
+function createPool(): Pool {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("Falta la variable de entorno DATABASE_URL");
+  // Conexión "pooled" de Neon: el pooler del lado de Neon multiplexa; aquí pocas conexiones.
+  const pool = new Pool({ connectionString, max: 5, idleTimeoutMillis: 5_000 });
+  // En Vercel Fluid compute, cierra las conexiones ociosas antes de suspender la función.
+  attachDatabasePool(pool);
+  return pool;
 }
 
-/** Cliente de Postgres, creado al primer uso (no durante el build). */
-export function db(): postgres.Sql {
-  if (!globalThis.__sql) globalThis.__sql = createClient();
-  return globalThis.__sql;
+/** Pool de Postgres, creado al primer uso (no durante el build). */
+function pool(): Pool {
+  if (!globalThis.__pool) globalThis.__pool = createPool();
+  return globalThis.__pool;
+}
+
+/** Ejecuta una consulta parametrizada ($1, $2, …) y devuelve las filas. */
+export async function query<T extends QueryResultRow>(text: string, params: unknown[] = []): Promise<T[]> {
+  const result = await pool().query<T>(text, params);
+  return result.rows;
 }
