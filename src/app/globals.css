@@ -260,6 +260,14 @@ button, input, textarea { font: inherit; }
   display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
   background: #dcfce7; color: #15803d; font-size: 1.8rem; font-weight: 700;
 }
+.dialog__icon--warn { background: #fef3c7; font-size: 1.6rem; }
+.similar {
+  display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; text-align: left;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--bg);
+}
+.similar img { width: 64px; height: 64px; flex: none; object-fit: cover; border-radius: 10px; }
+.similar div { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 0.9rem; }
+.similar span { color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
 @keyframes fade { from { opacity: 0; } }
 
 /* ---------- Botones ---------- */

@@ -45,3 +45,29 @@ export function nearbyPublished(report: Report, published: Report[]): { report: 
     .map((p) => ({ report: p, meters: Math.round(Math.min(reportDistance(report, p), reportDistance(p, report))) }))
     .sort((a, b) => a.meters - b.meters);
 }
+
+/**
+ * Reportes publicados y sin arreglar cerca de lo que un vecino está por enviar,
+ * para preguntarle si no es el mismo problema.
+ */
+export function similarNearby(
+  candidate: Pick<Report, "category" | "lat" | "lng" | "path">,
+  published: Report[],
+): { report: Report; meters: number }[] {
+  const draft: Report = {
+    ...candidate,
+    id: "",
+    status: "pendiente",
+    description: null,
+    reference: null,
+    createdAt: "",
+    resolvedAt: null,
+    photoUrl: null,
+    reporterName: null,
+    supportCount: 0,
+  };
+  return nearbyPublished(
+    draft,
+    published.filter((p) => p.status === "aprobado"),
+  );
+}

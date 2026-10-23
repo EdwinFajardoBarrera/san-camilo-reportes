@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupNearby, nearbyPublished } from "./duplicates";
+import { groupNearby, nearbyPublished, similarNearby } from "./duplicates";
 import type { Report } from "./types";
 
 const make = (id: string, lat: number, lng: number, extra: Partial<Report> = {}): Report => ({
@@ -51,5 +51,22 @@ describe("nearbyPublished", () => {
     const p2 = make("p2", 20.9701, -89.555, { status: "aprobado" });
     const p3 = make("p3", 20.98, -89.555, { status: "aprobado" });
     expect(nearbyPublished(fresh, [p1, p2, p3]).map((m) => m.report.id)).toEqual(["p2", "p1"]);
+  });
+});
+
+describe("similarNearby", () => {
+  it("avisa solo por reportes aprobados de la misma categoría, no por arreglados", () => {
+    const draft = { category: "bache" as const, lat: 20.97, lng: -89.555, path: null };
+    const open = make("open", 20.9701, -89.555, { status: "aprobado" });
+    const fixed = make("fixed", 20.97, -89.555, { status: "resuelto" });
+    const other = make("other", 20.97, -89.555, { status: "aprobado", category: "alumbrado" });
+    expect(similarNearby(draft, [open, fixed, other]).map((m) => m.report.id)).toEqual(["open"]);
+  });
+
+  it("compara calles por su trazo", () => {
+    const path = [[[-89.555, 20.97], [-89.553, 20.97]]] as Report["path"];
+    const existing = make("s", 20.97, -89.554, { status: "aprobado", category: "sin_pavimentar", path });
+    const draft = { category: "sin_pavimentar" as const, lat: 20.9702, lng: -89.5531, path: [[[-89.5532, 20.9702], [-89.552, 20.9702]]] as Report["path"] };
+    expect(similarNearby(draft, [existing])).toHaveLength(1);
   });
 });

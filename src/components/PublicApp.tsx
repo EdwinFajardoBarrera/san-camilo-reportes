@@ -217,6 +217,27 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
     setSent(true);
   }
 
+  /** El vecino confirmó que ya estaba reportado: no se envía y se le muestra el existente. */
+  async function handleDuplicate(existing: Report) {
+    reset();
+    setMode("view");
+    mapApi.current?.flyTo([existing.lat, existing.lng], 18);
+    if (!categoryConfig(existing.category).supportLabel) {
+      setNotice("Gracias. Ese problema ya está reportado; te lo mostramos en el mapa.");
+      return;
+    }
+    if (readSupported().has(existing.id)) {
+      setNotice("Ya habías apoyado ese reporte. Te lo mostramos en el mapa.");
+      return;
+    }
+    try {
+      await handleSupport(existing.id);
+      setNotice("Gracias. Sumamos tu apoyo al reporte que ya existía.");
+    } catch {
+      setNotice("Ese problema ya está reportado. Toca su marcador para apoyarlo.");
+    }
+  }
+
   async function handleMarkFixed(id: string) {
     await markFixed(id);
     setNotice("Reporte marcado como arreglado.");
@@ -431,6 +452,8 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
           street={street}
           photosEnabled={photosEnabled}
           hidden={mode !== "form"}
+          published={initialReports}
+          onDuplicate={handleDuplicate}
           onChangeLocation={() => setMode("locate")}
           onCancel={cancel}
           onSubmitted={submitted}

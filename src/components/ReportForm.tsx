@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CATEGORIES, categoryConfig, type Category, type LatLng } from "@/lib/config";
+import { agoLabel, daysBetween } from "@/lib/dates";
+import { similarNearby } from "@/lib/duplicates";
 import { pathLength, type Line } from "@/lib/geo";
 import { compressPhoto } from "@/lib/photo";
+import type { Report } from "@/lib/types";
 
 export type StreetSelection = { name: string | null; lines: Line[]; manual: boolean };
 
@@ -13,6 +17,9 @@ type Props = {
   street: StreetSelection | null;
   photosEnabled: boolean;
   hidden: boolean;
+  /** Reportes publicados, para avisar si ya hay uno igual muy cerca. */
+  published: Report[];
+  onDuplicate: (report: Report) => void;
   onChangeLocation: () => void;
   onCancel: () => void;
   onSubmitted: () => void;
@@ -24,6 +31,8 @@ export function ReportForm({
   street,
   photosEnabled,
   hidden,
+  published,
+  onDuplicate,
   onChangeLocation,
   onCancel,
   onSubmitted,
@@ -34,6 +43,8 @@ export function ReportForm({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [anonymous, setAnonymous] = useState(true);
+  const [similar, setSimilar] = useState<{ report: Report; meters: number } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const cat = CATEGORIES[category];
   const isStreet = categoryConfig(category).isStreet ?? false;
 
@@ -56,11 +67,20 @@ export function ReportForm({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (isStreet && !street) return setError("Marca la calle en el mapa");
 
-    const fields = new FormData(e.currentTarget);
+    const [lat, lng] = point;
+    const match = similarNearby({ category, lat, lng, path: isStreet && street ? street.lines : null }, published)[0];
+    if (match) setSimilar(match);
+    else void send();
+  }
+
+  async function send() {
+    setSimilar(null);
+    if (!formRef.current) return;
+    const fields = new FormData(formRef.current);
     const body = new FormData();
     body.set("category", category);
     if (isStreet && street) body.set("path", JSON.stringify(street.lines));
@@ -93,7 +113,10 @@ export function ReportForm({
   }
 
   return (
-    <form className={`sheet sheet--form${hidden ? " sheet--hidden" : ""}`} onSubmit={handleSubmit} aria-label="Detalles del reporte">
+    <form
+      ref={formRef}
+      className={`sheet sheet--form${hidden ? " sheet--hidden" : ""}`}
+      onSubmit={handleSubmit} aria-label="Detalles del reporte">
       <div className="sheet__body">
         <p className="step">
           <span className="step__badge" style={{ "--chip-color": cat.color } as React.CSSProperties}>
@@ -205,6 +228,74 @@ export function ReportForm({
           {anonymous ? "Es anónimo." : "Tu nombre se mostrará en el reporte."}
         </p>
       </div>
+
+      {similar && (
+        <SimilarDialog
+          match={similar}
+          onSame={() => {
+            setSimilar(null);
+            onDuplicate(similar.report);
+          }}
+          onDifferent={() => void send()}
+          onClose={() => setSimilar(null)}
+        />
+      )}
     </form>
+  );
+}
+
+type SimilarProps = {
+  match: { report: Report; meters: number };
+  onSame: () => void;
+  onDifferent: () => void;
+  onClose: () => void;
+};
+
+/** Pregunta si el problema ya está reportado antes de enviar uno repetido. */
+function SimilarDialog({ match: { report, meters }, onSame, onDifferent, onClose }: SimilarProps) {
+  const cat = CATEGORIES[report.category];
+  const supportable = Boolean(categoryConfig(report.category).supportLabel);
+  // Fuera del formulario: la hoja inferior crea su propio contexto de apilamiento.
+  return createPortal(
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div
+        className="dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="similar-title"
+        aria-describedby="similar-desc"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="dialog__icon dialog__icon--warn" aria-hidden>
+          {cat.icon}
+        </div>
+        <h2 id="similar-title">¿Ya está reportado?</h2>
+        <p id="similar-desc">
+          Hay un reporte de <strong>{cat.label.toLowerCase()}</strong> a {meters <= 5 ? "unos pasos" : `${meters} m`} de
+          aquí. Revisa si es el mismo problema.
+        </p>
+        <div className="similar">
+          {report.photoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- miniatura de Vercel Blob
+            <img src={report.photoUrl} alt="" />
+          )}
+          <div>
+            <strong>{report.reference ?? cat.label}</strong>
+            {report.description && <span>{report.description}</span>}
+            <span>
+              Reportado {agoLabel(daysBetween(report.createdAt))}
+              {supportable && report.supportCount > 0 && ` · ${report.supportCount} apoyos`}
+            </span>
+          </div>
+        </div>
+        <button type="button" className="btn btn--primary" onClick={onSame} autoFocus>
+          {supportable ? "Sí, es el mismo: apoyarlo" : "Sí, es el mismo"}
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={onDifferent}>
+          No, es otro: enviar mi reporte
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 }
