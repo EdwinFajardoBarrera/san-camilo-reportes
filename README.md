@@ -1,6 +1,6 @@
 # Reportes San Camilo
 
-Mapa colaborativo para que los vecinos de la colonia **San Camilo** (Mérida, Yucatán) reporten problemas en la vía pública:
+Mapa colaborativo para que los vecinos de la colonia **San Camilo** (Kanasín, Yucatán) reporten problemas en la vía pública:
 
 - 🕳️ Baches
 - 💡 Alumbrado público (sin luz o con fallas)

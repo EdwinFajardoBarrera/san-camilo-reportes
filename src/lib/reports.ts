@@ -131,6 +131,14 @@ export async function deleteReport(id: string): Promise<string | null> {
   return rows[0]?.photo_url ?? null;
 }
 
+/** Borra todos los reportes rechazados y devuelve las URLs de sus fotos. */
+export async function deleteRejectedReports(): Promise<{ count: number; photos: string[] }> {
+  const rows = await query<{ photo_url: string | null }>(
+    "DELETE FROM reports WHERE status = 'rechazado' RETURNING photo_url",
+  );
+  return { count: rows.length, photos: rows.flatMap((r) => (r.photo_url ? [r.photo_url] : [])) };
+}
+
 /**
  * Registra el apoyo de un vecino (uno por persona) a un reporte aprobado de una
  * categoría que lo permite. Devuelve el total, o null si no se puede apoyar.

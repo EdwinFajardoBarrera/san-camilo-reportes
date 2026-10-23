@@ -10,9 +10,15 @@ import { ReportMap } from "./MapLoader";
 import type { MapApi } from "./ReportMap";
 import { ReportForm, type StreetSelection } from "./ReportForm";
 
-/** view: mapa · pick: elegir punto · form: formulario · draw: trazar calle a mano */
-type Mode = "view" | "pick" | "form" | "draw";
+/**
+ * Flujo de reporte pensado para el celular:
+ * choose (qué es) → locate (mover el mapa bajo la mira) → form (detalles) → enviar.
+ * draw: trazar una calle a mano tocando puntos.
+ */
+type Mode = "view" | "choose" | "locate" | "form" | "draw";
 
+// Espacio que ocupan los paneles flotantes sobre el mapa.
+const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 const SUPPORTED_KEY = "sc-apoyos";
 
 function readSupported(): Set<string> {
@@ -25,33 +31,30 @@ function readSupported(): Set<string> {
 
 function rememberSupported(id: string) {
   try {
-    const ids = readSupported().add(id);
-    localStorage.setItem(SUPPORTED_KEY, JSON.stringify([...ids]));
+    localStorage.setItem(SUPPORTED_KEY, JSON.stringify([...readSupported().add(id)]));
   } catch {
     // Sin almacenamiento local: solo no recordamos el apoyo en este navegador.
   }
 }
-
-// Espacio que ocupan los paneles flotantes sobre el mapa.
-const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 
 type Props = { initialReports: Report[]; isAdmin: boolean; photosEnabled: boolean };
 
 export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
   const router = useRouter();
   const mapApi = useRef<MapApi | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [category, setCategory] = useState<Category | null>(null);
-  const [street, setStreet] = useState<StreetSelection | null>(null);
-  const [streetError, setStreetError] = useState<string | null>(null);
-  const [manualLine, setManualLine] = useState<Line>([]);
   const [active, setActive] = useState<Set<Category>>(() => new Set(CATEGORY_KEYS));
   const [showResolved, setShowResolved] = useState(false);
   const [mode, setMode] = useState<Mode>("view");
+  const [category, setCategory] = useState<Category | null>(null);
   const [draft, setDraft] = useState<LatLng | null>(null);
+  const [street, setStreet] = useState<StreetSelection | null>(null);
+  const [manualLine, setManualLine] = useState<Line>([]);
+  const [locateError, setLocateError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pickError, setPickError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  const isStreet = category ? (categoryConfig(category).isStreet ?? false) : false;
 
   const visible = useMemo(
     () => initialReports.filter((r) => active.has(r.category) && (showResolved || r.status !== "resuelto")),
@@ -74,90 +77,110 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
     });
   }
 
-  const isStreet = category ? (categoryConfig(category).isStreet ?? false) : false;
-
-  function resetReport() {
-    setDraft(null);
-    setFormOpen(false);
+  function reset() {
     setCategory(null);
+    setDraft(null);
     setStreet(null);
-    setStreetError(null);
     setManualLine([]);
-    setPickError(null);
+    setLocateError(null);
   }
 
   function startReport() {
     setNotice(null);
-    resetReport();
-    setMode("pick");
+    reset();
+    setMode("choose");
   }
 
-  function detectStreet(point: LatLng) {
-    const found = mapApi.current?.detectStreet(point);
-    if (found) {
-      setStreet({ ...found, manual: false });
-      setStreetError(null);
-    } else {
-      setStreet(null);
-      setStreetError("No encontramos una calle ahí. Toca justo sobre la calle o trázala a mano.");
-    }
-  }
-
-  function pick(point: LatLng) {
-    if (mode === "draw") {
-      setManualLine((line) => [...line, [point[1], point[0]]]);
-      return;
-    }
-    if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) {
-      setPickError(`Ese punto está fuera de ${NEIGHBORHOOD.name}. Elige uno dentro del área marcada.`);
-      return;
-    }
-    setPickError(null);
-    setDraft(point);
-    if (isStreet) detectStreet(point);
-    setFormOpen(true);
-    setMode("form");
-  }
-
-  function changeCategory(next: Category) {
+  function chooseCategory(next: Category) {
     setCategory(next);
-    if (categoryConfig(next).isStreet && !street && draft) detectStreet(draft);
+    setStreet(null);
+    setLocateError(null);
+    setMode("locate");
+    // Acercar para ubicar con precisión.
+    const api = mapApi.current;
+    if (api && api.getZoom() < 16.5) api.flyTo(api.getCenter(), 17);
   }
 
-  function startDrawing() {
-    setManualLine([]);
-    setMode("draw");
-  }
-
-  function finishDrawing() {
-    if (manualLine.length >= 2) {
-      setStreet({ name: null, lines: [manualLine], manual: true });
-      setStreetError(null);
+  /** Confirma el punto bajo la mira. */
+  function confirmLocation() {
+    const api = mapApi.current;
+    if (!api) return;
+    const point = api.getCenter();
+    if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) {
+      setLocateError(`Ese punto está fuera de ${NEIGHBORHOOD.name}. Mueve el mapa al área marcada.`);
+      return;
     }
+    if (isStreet) {
+      const found = api.detectStreet(point);
+      if (!found) {
+        setLocateError("No encontramos una calle bajo la mira. Acércala a la calle o trázala a mano.");
+        return;
+      }
+      setStreet({ ...found, manual: false });
+    }
+    setLocateError(null);
+    setDraft(point);
     setMode("form");
   }
 
   function useMyLocation() {
     if (!navigator.geolocation) {
-      setPickError("Tu navegador no permite obtener la ubicación.");
+      setLocateError("Tu celular no permite obtener la ubicación.");
       return;
     }
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => pick([pos.coords.latitude, pos.coords.longitude]),
-      () => setPickError("No se pudo obtener tu ubicación. Toca el mapa en su lugar."),
+      (pos) => {
+        setLocating(false);
+        const point: LatLng = [pos.coords.latitude, pos.coords.longitude];
+        if (!isPointInPolygon(point, NEIGHBORHOOD.polygon)) {
+          setLocateError(`Parece que no estás en ${NEIGHBORHOOD.name}. Mueve el mapa hasta el problema.`);
+          return;
+        }
+        setLocateError(null);
+        mapApi.current?.flyTo(point);
+      },
+      () => {
+        setLocating(false);
+        setLocateError("No pudimos obtener tu ubicación. Mueve el mapa hasta el problema.");
+      },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }
 
+  function startDrawing() {
+    setManualLine([]);
+    setLocateError(null);
+    setMode("draw");
+  }
+
+  function addDrawPoint(point: LatLng) {
+    setManualLine((line) => [...line, [point[1], point[0]]]);
+  }
+
+  function finishDrawing() {
+    if (manualLine.length < 2) return;
+    const [lng, lat] = manualLine[Math.floor(manualLine.length / 2)];
+    setStreet({ name: null, lines: [manualLine], manual: true });
+    setDraft((d) => d ?? [lat, lng]);
+    setMode("form");
+  }
+
   function cancel() {
-    resetReport();
+    reset();
     setMode("view");
   }
 
   function submitted() {
-    resetReport();
+    reset();
     setMode("view");
     setSent(true);
+  }
+
+  async function handleMarkFixed(id: string) {
+    await markFixed(id);
+    setNotice("Reporte marcado como arreglado.");
+    router.refresh();
   }
 
   async function handleSupport(id: string): Promise<number> {
@@ -169,21 +192,18 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
     return count;
   }
 
-  async function handleMarkFixed(id: string) {
-    await markFixed(id);
-    setNotice("Reporte marcado como arreglado.");
-    router.refresh();
-  }
+  const reporting = mode !== "view";
+  const cat = category ? CATEGORIES[category] : null;
 
   return (
-    <main className="app">
+    <main className={`app${reporting ? " app--reporting" : ""}`}>
       <ReportMap
         reports={visible}
         apiRef={mapApi}
-        draft={isStreet ? null : draft}
-        draftPath={mode === "draw" ? [manualLine] : isStreet ? street?.lines : null}
+        draft={!isStreet && mode === "form" ? draft : null}
+        draftPath={mode === "draw" ? [manualLine] : isStreet && mode === "form" ? street?.lines : null}
         focusPath={mode === "form"}
-        onPick={mode === "pick" || mode === "draw" ? pick : undefined}
+        onPick={mode === "draw" ? addDrawPoint : undefined}
         onMarkFixed={isAdmin ? handleMarkFixed : undefined}
         onSupport={handleSupport}
         hasSupported={(id) => readSupported().has(id)}
@@ -211,85 +231,34 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
           </a>
         </header>
 
-        <nav className="filters" aria-label="Filtrar por categoría">
-          {CATEGORY_KEYS.map((key) => {
-            const cat = CATEGORIES[key];
-            return (
+        {!reporting && (
+          <nav className="filters" aria-label="Filtrar por categoría">
+            {CATEGORY_KEYS.map((key) => (
               <button
                 key={key}
                 type="button"
                 className="chip"
                 aria-pressed={active.has(key)}
                 onClick={() => toggle(key)}
-                style={{ "--chip-color": cat.color } as React.CSSProperties}
+                style={{ "--chip-color": CATEGORIES[key].color } as React.CSSProperties}
               >
-                <span aria-hidden>{cat.icon}</span>
-                {cat.label}
+                <span aria-hidden>{CATEGORIES[key].icon}</span>
+                {CATEGORIES[key].label}
                 <span className="chip__count">{counts[key]}</span>
               </button>
-            );
-          })}
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={showResolved}
-            onClick={() => setShowResolved((v) => !v)}
-            style={{ "--chip-color": "#16a34a" } as React.CSSProperties}
-          >
-            <span aria-hidden>✅</span>
-            Arreglados
-            <span className="chip__count">{fixedCount}</span>
-          </button>
-        </nav>
-
-        {mode === "pick" && (
-          <div className="panel banner" role="status">
-            <span className={pickError ? "error" : undefined}>
-              {pickError ?? (isStreet ? "Toca la calle sin pavimentar" : "Toca el mapa donde está el problema")}
-            </span>
-            <div className="banner__actions">
-              <button type="button" className="btn btn--ghost btn--small" onClick={useMyLocation}>
-                📍 Mi ubicación
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={formOpen ? () => setMode("form") : cancel}
-              >
-                {formOpen ? "Volver" : "Cancelar"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {mode === "draw" && (
-          <div className="panel banner" role="status">
-            <span>
-              Toca puntos a lo largo de la calle
-              <span className="optional"> · {manualLine.length} puntos</span>
-            </span>
-            <div className="banner__actions">
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={() => setManualLine((l) => l.slice(0, -1))}
-                disabled={manualLine.length === 0}
-              >
-                Deshacer
-              </button>
-              <button type="button" className="btn btn--ghost btn--small" onClick={() => setMode("form")}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary btn--small"
-                onClick={finishDrawing}
-                disabled={manualLine.length < 2}
-              >
-                Listo
-              </button>
-            </div>
-          </div>
+            ))}
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={showResolved}
+              onClick={() => setShowResolved((v) => !v)}
+              style={{ "--chip-color": "#16a34a" } as React.CSSProperties}
+            >
+              <span aria-hidden>✅</span>
+              Arreglados
+              <span className="chip__count">{fixedCount}</span>
+            </button>
+          </nav>
         )}
 
         {notice && mode === "view" && (
@@ -306,6 +275,126 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
         <button type="button" className="btn btn--primary fab" onClick={startReport}>
           <span aria-hidden>＋</span> Reportar problema
         </button>
+      )}
+
+      {/* Paso 1: qué se reporta */}
+      {mode === "choose" && (
+        <section className="sheet sheet--compact" aria-labelledby="choose-title">
+          <div className="sheet__head">
+            <h2 id="choose-title">¿Qué quieres reportar?</h2>
+            <button type="button" className="btn btn--ghost btn--small" onClick={cancel}>
+              Cancelar
+            </button>
+          </div>
+          <div className="choices">
+            {CATEGORY_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="choice"
+                onClick={() => chooseCategory(key)}
+                style={{ "--chip-color": CATEGORIES[key].color } as React.CSSProperties}
+              >
+                <span className="choice__icon" aria-hidden>
+                  {CATEGORIES[key].icon}
+                </span>
+                {CATEGORIES[key].label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Paso 2: ubicar con la mira al centro */}
+      {mode === "locate" && cat && (
+        <>
+          <div className={`crosshair${isStreet ? " crosshair--street" : ""}`} aria-hidden>
+            <span className="crosshair__pin" style={{ "--chip-color": cat.color } as React.CSSProperties}>
+              <span>{cat.icon}</span>
+            </span>
+          </div>
+          <section className="sheet sheet--compact" aria-live="polite">
+            <p className="step">
+              <span className="step__badge" style={{ "--chip-color": cat.color } as React.CSSProperties}>
+                {cat.icon} {cat.label}
+              </span>
+              <button type="button" className="link-button" onClick={() => setMode("choose")}>
+                Cambiar
+              </button>
+            </p>
+            <p className={locateError ? "error" : "hint hint--left"}>
+              {locateError ??
+                (isStreet
+                  ? "Mueve el mapa hasta que la mira quede sobre la calle sin pavimentar."
+                  : "Mueve el mapa hasta que la mira quede justo sobre el problema.")}
+            </p>
+            <div className="locate-actions">
+              <button type="button" className="btn btn--ghost btn--big" onClick={useMyLocation} disabled={locating}>
+                {locating ? "Buscando…" : "📍 Mi ubicación"}
+              </button>
+              <button type="button" className="btn btn--primary btn--big" onClick={confirmLocation}>
+                {isStreet ? "Elegir esta calle" : "Confirmar ubicación"}
+              </button>
+            </div>
+            <div className="locate-footer">
+              <button type="button" className="link-button" onClick={cancel}>
+                Cancelar
+              </button>
+              {isStreet && (
+                <button type="button" className="link-button" onClick={startDrawing}>
+                  ✏️ Prefiero trazarla a mano
+                </button>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* Trazo a mano */}
+      {mode === "draw" && (
+        <section className="sheet sheet--compact" aria-live="polite">
+          <p className="hint hint--left">
+            Toca el mapa a lo largo de la calle, de una esquina a la otra.{" "}
+            <strong>{manualLine.length} puntos</strong>
+          </p>
+          <div className="locate-actions">
+            <button
+              type="button"
+              className="btn btn--ghost btn--big"
+              onClick={() => setManualLine((l) => l.slice(0, -1))}
+              disabled={manualLine.length === 0}
+            >
+              ↶ Deshacer
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary btn--big"
+              onClick={finishDrawing}
+              disabled={manualLine.length < 2}
+            >
+              Listo
+            </button>
+          </div>
+          <div className="locate-footer">
+            <button type="button" className="link-button" onClick={() => setMode("locate")}>
+              Volver
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Paso 3: detalles y envío. Se mantiene montado para no perder lo escrito. */}
+      {category && draft && mode !== "view" && (
+        <ReportForm
+          point={draft}
+          category={category}
+          street={street}
+          photosEnabled={photosEnabled}
+          hidden={mode !== "form"}
+          onChangeLocation={() => setMode("locate")}
+          onCancel={cancel}
+          onSubmitted={submitted}
+        />
       )}
 
       {sent && (
@@ -331,22 +420,6 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
             </button>
           </div>
         </div>
-      )}
-
-      {formOpen && draft && (
-        <ReportForm
-          point={draft}
-          category={category}
-          onCategoryChange={changeCategory}
-          street={street}
-          streetError={streetError}
-          onDrawStreet={startDrawing}
-          onRepick={() => setMode("pick")}
-          photosEnabled={photosEnabled}
-          hidden={mode !== "form"}
-          onCancel={cancel}
-          onSubmitted={submitted}
-        />
       )}
     </main>
   );

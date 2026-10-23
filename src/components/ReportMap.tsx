@@ -19,6 +19,10 @@ import { popupContent } from "./popup";
 export type MapApi = {
   /** Busca la calle más cercana al punto y devuelve su trazo dentro de la colonia. */
   detectStreet: (point: LatLng) => { name: string | null; lines: Line[] } | null;
+  /** Punto del mapa bajo el centro de la pantalla (donde está la mira). */
+  getCenter: () => LatLng;
+  flyTo: (point: LatLng, zoom?: number) => void;
+  getZoom: () => number;
 };
 
 type Props = {
@@ -246,7 +250,17 @@ export function ReportMap({
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
-    if (apiRef) apiRef.current = { detectStreet: (point) => findStreet(map, point) };
+    if (apiRef) {
+      apiRef.current = {
+        detectStreet: (point) => findStreet(map, point),
+        getCenter: () => {
+          const c = map.getCenter();
+          return [c.lat, c.lng];
+        },
+        flyTo: (point, zoom = 18) => map.flyTo({ center: toLngLat(point), zoom, duration: 800 }),
+        getZoom: () => map.getZoom(),
+      };
+    }
 
     map.on("load", async () => {
       await addPinImages(map);

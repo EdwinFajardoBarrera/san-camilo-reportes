@@ -7,7 +7,8 @@ import { groupNearby, nearbyPublished } from "@/lib/duplicates";
 import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
-import { changeStatus, logout, removeReport } from "./actions";
+import { changeStatus, logout, removeAllRejected, removeReport } from "./actions";
+import { ConfirmButton } from "./ConfirmButton";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -125,9 +126,9 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
         {report.status === "rechazado" && (
           <form action={removeReport}>
             <input type="hidden" name="id" value={report.id} />
-            <button type="submit" className="btn btn--danger">
+            <ConfirmButton className="btn btn--danger" message="¿Eliminar este reporte? No se puede deshacer.">
               Eliminar
-            </button>
+            </ConfirmButton>
           </form>
         )}
       </div>
@@ -185,6 +186,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <ReportMap reports={reports} showStatus />
         </section>
         <section className="admin__list">
+          {status === "rechazado" && reports.length > 0 && (
+            <form action={removeAllRejected} className="bulk-bar">
+              <span>
+                {reports.length} {reports.length === 1 ? "reporte rechazado" : "reportes rechazados"}
+              </span>
+              <ConfirmButton
+                className="btn btn--danger"
+                message={`¿Eliminar los ${reports.length} reportes rechazados y sus fotos? No se puede deshacer.`}
+              >
+                Eliminar todos
+              </ConfirmButton>
+            </form>
+          )}
           {reports.length === 0 ? (
             <p className="empty">No hay reportes en «{STATUS_LABELS[status]}».</p>
           ) : (

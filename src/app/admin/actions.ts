@@ -12,7 +12,7 @@ import {
   requireAdmin,
   startSession,
 } from "@/lib/auth";
-import { deleteReport, setReportStatus } from "@/lib/reports";
+import { deleteRejectedReports, deleteReport, setReportStatus } from "@/lib/reports";
 import { getClientIp } from "@/lib/request";
 import { deletePhoto } from "@/lib/storage";
 
@@ -48,7 +48,7 @@ const statusSchema = z.object({
     .or(z.literal("").transform(() => undefined)),
 });
 
-/** Mediodía en Mérida del día indicado, sin pasar de ahora. */
+/** Mediodía en Yucatán del día indicado, sin pasar de ahora. */
 function resolvedDate(day?: string): Date | undefined {
   if (!day) return undefined;
   const date = new Date(`${day}T12:00:00-06:00`);
@@ -73,6 +73,14 @@ export async function markFixed(id: string): Promise<void> {
   await requireAdmin();
   await setReportStatus(z.string().uuid().parse(id), "resuelto");
   revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+/** Vacía la lista de rechazados, incluidas sus fotos. */
+export async function removeAllRejected(): Promise<void> {
+  await requireAdmin();
+  const { photos } = await deleteRejectedReports();
+  await Promise.all(photos.map(deletePhoto));
   revalidatePath("/admin");
 }
 

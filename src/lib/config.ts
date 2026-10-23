@@ -5,7 +5,7 @@ export type LatLng = [lat: number, lng: number];
 
 export const NEIGHBORHOOD = {
   name: "San Camilo",
-  city: "Mérida, Yucatán",
+  city: "Kanasín, Yucatán",
   // Contorno tomado del mapa original de Google My Maps.
   polygon: [
     [20.9818094, -89.5637876],
