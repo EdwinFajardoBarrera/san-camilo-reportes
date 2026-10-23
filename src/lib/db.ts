@@ -2,7 +2,7 @@ import "server-only";
 import postgres from "postgres";
 
 declare global {
-  // Reutiliza la conexión entre recargas en desarrollo.
+  // Reutiliza la conexión entre invocaciones y recargas en desarrollo.
   var __sql: postgres.Sql | undefined;
 }
 
@@ -18,5 +18,8 @@ function createClient() {
   });
 }
 
-export const sql = globalThis.__sql ?? createClient();
-if (process.env.NODE_ENV !== "production") globalThis.__sql = sql;
+/** Cliente de Postgres, creado al primer uso (no durante el build). */
+export function db(): postgres.Sql {
+  if (!globalThis.__sql) globalThis.__sql = createClient();
+  return globalThis.__sql;
+}

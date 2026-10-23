@@ -47,7 +47,7 @@ Para adaptar la app a otra colonia, basta con cambiar `src/lib/config.ts`.
 
 ## Desarrollo local
 
-Requisitos: Node.js 20+ y un Postgres (local o la misma base de Neon).
+Requisitos: Node.js 22+ y un Postgres (local o la misma base de Neon).
 
 ```bash
 npm install

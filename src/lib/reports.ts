@@ -1,5 +1,5 @@
 import "server-only";
-import { sql } from "./db";
+import { db } from "./db";
 import { PUBLIC_STATUSES, REPORT_RATE_LIMIT, type Category, type Status } from "./config";
 import type { Report } from "./types";
 import type { NewReport } from "./validation";
@@ -31,6 +31,7 @@ const toReport = (r: Row): Report => ({
 });
 
 export async function listPublicReports(): Promise<Report[]> {
+  const sql = db();
   const rows = await sql<Row[]>`
     SELECT id, category, status, description, reference, lat, lng, created_at, resolved_at
     FROM reports
@@ -41,6 +42,7 @@ export async function listPublicReports(): Promise<Report[]> {
 }
 
 export async function listReportsByStatus(status: Status): Promise<Report[]> {
+  const sql = db();
   const rows = await sql<Row[]>`
     SELECT id, category, status, description, reference, lat, lng, created_at, resolved_at
     FROM reports
@@ -51,6 +53,7 @@ export async function listReportsByStatus(status: Status): Promise<Report[]> {
 }
 
 export async function countByStatus(): Promise<Record<Status, number>> {
+  const sql = db();
   const rows = await sql<{ status: Status; n: number }[]>`
     SELECT status, count(*)::int AS n FROM reports GROUP BY status`;
   const counts: Record<Status, number> = { pendiente: 0, aprobado: 0, rechazado: 0, resuelto: 0 };
@@ -60,6 +63,7 @@ export async function countByStatus(): Promise<Record<Status, number>> {
 
 /** Cuántos reportes envió este remitente dentro de la ventana del límite. */
 export async function recentReportsBy(reporterHash: string): Promise<number> {
+  const sql = db();
   const [{ n }] = await sql<{ n: number }[]>`
     SELECT count(*)::int AS n FROM reports
     WHERE reporter_hash = ${reporterHash}
@@ -68,6 +72,7 @@ export async function recentReportsBy(reporterHash: string): Promise<number> {
 }
 
 export async function createReport(input: NewReport, reporterHash: string): Promise<string> {
+  const sql = db();
   const [{ id }] = await sql<{ id: string }[]>`
     INSERT INTO reports (category, description, reference, lat, lng, reporter_hash)
     VALUES (${input.category}, ${input.description}, ${input.reference}, ${input.lat}, ${input.lng}, ${reporterHash})
@@ -76,6 +81,7 @@ export async function createReport(input: NewReport, reporterHash: string): Prom
 }
 
 export async function setReportStatus(id: string, status: Status): Promise<void> {
+  const sql = db();
   const reviewed = status === "aprobado" || status === "rechazado";
   const resolved = status === "resuelto";
   await sql`
@@ -87,5 +93,6 @@ export async function setReportStatus(id: string, status: Status): Promise<void>
 }
 
 export async function deleteReport(id: string): Promise<void> {
+  const sql = db();
   await sql`DELETE FROM reports WHERE id = ${id}`;
 }
