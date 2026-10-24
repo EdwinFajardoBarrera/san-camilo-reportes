@@ -1,29 +1,19 @@
-"use client";
-
 import Link from "next/link";
-import { useActionState } from "react";
-import { login, type LoginState } from "./actions";
+import { login } from "./actions";
+import { ActionForm } from "./ActionForm";
+import { PasswordField, UsernameField } from "./fields";
 
 export function LoginForm() {
-  const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
   return (
-    <form action={action} className="card login">
-      <h1>Panel de administración</h1>
-      <label className="field">
-        Contraseña
-        <input type="password" name="password" required autoComplete="current-password" autoFocus />
-      </label>
-      {state.error && (
-        <p className="error" role="alert">
-          {state.error}
-        </p>
-      )}
-      <button type="submit" className="btn btn--primary" disabled={pending}>
-        {pending ? "Entrando…" : "Entrar"}
-      </button>
+    <div className="card login">
+      <h1>Panel de reportes</h1>
+      <ActionForm action={login} submitLabel="Entrar" pendingLabel="Entrando…" className="login__form">
+        <UsernameField autoFocus />
+        <PasswordField />
+      </ActionForm>
       <Link href="/" className="btn btn--ghost login__back">
         ← Ir al mapa público
       </Link>
-    </form>
+    </div>
   );
 }

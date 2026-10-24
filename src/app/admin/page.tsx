@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { isAdmin } from "@/lib/auth";
 import { CATEGORIES, STATUSES, STATUS_LABELS, categoryConfig, type Status } from "@/lib/config";
 import { groupNearby, nearbyPublished } from "@/lib/duplicates";
 import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
-import { changeStatus, logout, removeAllRejected, removeReport } from "./actions";
+import { changeStatus, removeAllRejected, removeReport } from "./actions";
 import { ConfirmButton } from "./ConfirmButton";
 import { AdminMap } from "./AdminMap";
-import { LoginForm } from "./LoginForm";
+import { AdminHeader } from "./AdminHeader";
+import { gate } from "./gate";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin · Reportes", robots: { index: false } };
@@ -82,7 +82,7 @@ function NearbyWarning({ nearby }: { nearby: Nearby }) {
   );
 }
 
-function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }) {
+function ReportCard({ report, nearby = [], canDelete }: { report: Report; nearby?: Nearby; canDelete: boolean }) {
   const cat = CATEGORIES[report.category];
   const osm = `https://www.openstreetmap.org/?mlat=${report.lat}&mlon=${report.lng}#map=19/${report.lat}/${report.lng}`;
   return (
@@ -100,6 +100,7 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
       </div>
       <ReportDates report={report} />
       <p className="report__dates">Por: {report.reporterName ?? "anónimo"}</p>
+      {report.reviewedBy && <p className="report__dates">Último cambio: {report.reviewedBy}</p>}
       <NearbyWarning nearby={nearby} />
       {report.photoUrl && (
         <a href={report.photoUrl} target="_blank" rel="noreferrer" className="report__photo">
@@ -129,7 +130,7 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
             </button>
           </form>
         ))}
-        {report.status === "rechazado" && (
+        {canDelete && report.status === "rechazado" && (
           <form action={removeReport}>
             <input type="hidden" name="id" value={report.id} />
             <ConfirmButton className="btn btn--danger" message="¿Eliminar este reporte? No se puede deshacer.">
@@ -143,13 +144,9 @@ function ReportCard({ report, nearby = [] }: { report: Report; nearby?: Nearby }
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ estado?: string }> }) {
-  if (!(await isAdmin())) {
-    return (
-      <main className="admin admin--login">
-        <LoginForm />
-      </main>
-    );
-  }
+  const access = await gate();
+  if ("screen" in access) return access.screen;
+  const canDelete = access.user.role === "admin";
 
   const { estado } = await searchParams;
   const status: Status = STATUSES.includes(estado as Status) ? (estado as Status) : "pendiente";
@@ -165,19 +162,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <main className="admin">
-      <header className="topbar">
-        <h1>Panel de reportes</h1>
-        <div className="topbar__actions">
-          <Link href="/" className="link-muted">
-            Ver mapa público
-          </Link>
-          <form action={logout}>
-            <button type="submit" className="btn btn--ghost">
-              Salir
-            </button>
-          </form>
-        </div>
-      </header>
+      <AdminHeader user={access.user} title="Panel de reportes" />
 
       <nav className="tabs" aria-label="Estado">
         {STATUSES.map((s) => (
@@ -190,7 +175,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <div className="admin__body">
         <AdminMap reports={reports} />
         <section className="admin__list">
-          {status === "rechazado" && reports.length > 0 && (
+          {canDelete && status === "rechazado" && reports.length > 0 && (
             <form action={removeAllRejected} className="bulk-bar">
               <span>
                 {reports.length} {reports.length === 1 ? "reporte rechazado" : "reportes rechazados"}
@@ -209,7 +194,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <ul>
               {groups.map((group) =>
                 group.length === 1 ? (
-                  <ReportCard key={group[0].id} report={group[0]} nearby={nearbyPublished(group[0], published)} />
+                  <ReportCard
+                    key={group[0].id}
+                    report={group[0]}
+                    nearby={nearbyPublished(group[0], published)}
+                    canDelete={canDelete}
+                  />
                 ) : (
                   <li key={group[0].id} className="dup-group">
                     <p className="dup-group__title">
@@ -218,7 +208,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     </p>
                     <ul>
                       {group.map((r) => (
-                        <ReportCard key={r.id} report={r} nearby={nearbyPublished(r, published)} />
+                        <ReportCard key={r.id} report={r} nearby={nearbyPublished(r, published)} canDelete={canDelete} />
                       ))}
                     </ul>
                   </li>
