@@ -16,6 +16,7 @@ const make = (id: string, lat: number, lng: number, extra: Partial<Report> = {})
   photoUrl: null,
   reporterName: null,
   supportCount: 0,
+  fixedVotes: 0,
   ...extra,
 });
 

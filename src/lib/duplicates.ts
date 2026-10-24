@@ -65,6 +65,7 @@ export function similarNearby(
     photoUrl: null,
     reporterName: null,
     supportCount: 0,
+    fixedVotes: 0,
   };
   return nearbyPublished(
     draft,

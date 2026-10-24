@@ -21,6 +21,7 @@ type Row = {
   photo_url: string | null;
   reporter_name: string | null;
   support_count: number;
+  fixed_votes: number;
   reviewed_by: string | null;
 };
 
@@ -38,11 +39,13 @@ const toReport = (r: Row): Report => ({
   photoUrl: r.photo_url,
   reporterName: r.reporter_name,
   supportCount: r.support_count,
+  fixedVotes: r.fixed_votes,
   reviewedBy: r.reviewed_by,
 });
 
 const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, reporter_name, reviewed_by,
-  (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count`;
+  (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count,
+  (SELECT count(*)::int FROM fixed_votes f WHERE f.report_id = reports.id) AS fixed_votes`;
 
 export async function listPublicReports(): Promise<Report[]> {
   const rows = await query<Row>(
@@ -54,10 +57,16 @@ export async function listPublicReports(): Promise<Report[]> {
 }
 
 export async function listReportsByStatus(status: Status): Promise<Report[]> {
-  // Los pendientes se revisan del más antiguo al más nuevo.
-  const order = status === "pendiente" ? "ASC" : "DESC";
+  // Los pendientes se revisan del más antiguo al más nuevo. En los publicados
+  // van primero los que más vecinos dicen que ya se arreglaron.
+  const order =
+    status === "pendiente"
+      ? "created_at ASC"
+      : status === "aprobado"
+        ? "fixed_votes DESC, created_at DESC"
+        : "created_at DESC";
   const rows = await query<Row>(
-    `SELECT ${COLUMNS} FROM reports WHERE status = $1 ORDER BY created_at ${order} LIMIT 500`,
+    `SELECT ${COLUMNS} FROM reports WHERE status = $1 ORDER BY ${order} LIMIT 500`,
     [status],
   );
   return rows.map(toReport);
@@ -108,7 +117,8 @@ export async function createReport(
 /**
  * Cambia el estado de un reporte. Al marcarlo como arreglado se guarda la fecha
  * indicada (o la actual); nunca antes de la fecha del reporte. Al rechazarlo se
- * quita la foto. Se guarda quién hizo el cambio. Devuelve la URL de la foto que haya que borrar del almacenamiento.
+ * quita la foto. Al reabrirlo se borran los avisos de arreglado, que ya no aplican.
+ * Se guarda quién hizo el cambio. Devuelve la URL de la foto que haya que borrar del almacenamiento.
  */
 export async function setReportStatus(
   id: string,
@@ -131,6 +141,7 @@ export async function setReportStatus(
      RETURNING CASE WHEN $6 THEN (SELECT photo_url FROM old) END AS removed_photo`,
     [id, status, reviewed, resolved, resolvedAt ?? null, rejected, reviewedBy],
   );
+  if (status === "aprobado") await query("DELETE FROM fixed_votes WHERE report_id = $1", [id]);
   return rows[0]?.removed_photo ?? null;
 }
 
@@ -163,5 +174,20 @@ export async function addSupport(reportId: string, supporterHash: string, catego
     [reportId, supporterHash],
   );
   const [{ n }] = await query<{ n: number }>("SELECT count(*)::int AS n FROM supports WHERE report_id = $1", [reportId]);
+  return n;
+}
+
+/**
+ * Registra el aviso de un vecino (uno por persona) de que un reporte aprobado ya
+ * se arregló. No cambia el estado. Devuelve el total, o null si no se puede avisar.
+ */
+export async function addFixedVote(reportId: string, voterHash: string): Promise<number | null> {
+  const [report] = await query<{ id: string }>("SELECT id FROM reports WHERE id = $1 AND status = 'aprobado'", [reportId]);
+  if (!report) return null;
+  await query("INSERT INTO fixed_votes (report_id, voter_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING", [
+    reportId,
+    voterHash,
+  ]);
+  const [{ n }] = await query<{ n: number }>("SELECT count(*)::int AS n FROM fixed_votes WHERE report_id = $1", [reportId]);
   return n;
 }

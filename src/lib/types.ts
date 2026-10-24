@@ -18,6 +18,8 @@ export type Report = {
   /** Nombre que el vecino eligió mostrar; null si es anónimo. */
   reporterName: string | null;
   supportCount: number;
+  /** Vecinos que avisan que ya se arregló (el equipo decide si lo marca). */
+  fixedVotes: number;
   /** Usuario del equipo que hizo el último cambio de estado. Solo en el panel. */
   reviewedBy?: string | null;
 };

@@ -10,6 +10,10 @@ type Options = {
   onSupport?: (id: string) => Promise<number>;
   /** Si este navegador ya apoyó el reporte. */
   supported?: boolean;
+  /** Avisar que ya se arregló; devuelve el nuevo total de avisos. */
+  onFixedVote?: (id: string) => Promise<number>;
+  /** Si este navegador ya avisó que se arregló. */
+  fixedVoted?: boolean;
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
@@ -37,7 +41,10 @@ function ageClass(days: number) {
  * Contenido del globo de información. Se construye con textContent (no innerHTML)
  * porque la descripción la escriben los vecinos.
  */
-export function popupContent(report: Report, { showStatus, onMarkFixed, onSupport, supported }: Options): HTMLElement {
+export function popupContent(
+  report: Report,
+  { showStatus, onMarkFixed, onSupport, supported, onFixedVote, fixedVoted }: Options,
+): HTMLElement {
   const cat = CATEGORIES[report.category];
   const fixed = report.status === "resuelto" && report.resolvedAt;
   const root = el("div", "popup");
@@ -101,6 +108,39 @@ export function popupContent(report: Report, { showStatus, onMarkFixed, onSuppor
         button.disabled = true;
         try {
           setCount(await onSupport(report.id));
+          markDone();
+        } catch {
+          button.disabled = false;
+          button.textContent = "No se pudo. Reintentar";
+        }
+      });
+      box.append(button);
+    }
+    root.append(box);
+  }
+
+  if (report.status === "aprobado" && (onFixedVote || report.fixedVotes > 0)) {
+    const box = el("div", "fixed-vote");
+    const count = el("span", "fixed-vote__count");
+    const setCount = (n: number) => {
+      count.textContent = n === 0 ? "" : n === 1 ? "1 vecino dice que ya se arregló" : `${n} vecinos dicen que ya se arregló`;
+      count.hidden = n === 0;
+    };
+    setCount(report.fixedVotes);
+    box.append(count);
+    if (onFixedVote) {
+      const button = el("button", "btn btn--fixed-vote btn--small");
+      button.type = "button";
+      const markDone = () => {
+        button.disabled = true;
+        button.textContent = "✓ Gracias, avisamos al equipo";
+      };
+      if (fixedVoted) markDone();
+      else button.textContent = "✅ Ya lo arreglaron";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          setCount(await onFixedVote(report.id));
           markDone();
         } catch {
           button.disabled = false;

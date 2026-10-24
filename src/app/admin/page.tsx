@@ -102,6 +102,12 @@ function ReportCard({ report, nearby = [], canDelete }: { report: Report; nearby
       <p className="report__dates">Por: {report.reporterName ?? "anónimo"}</p>
       {report.reviewedBy && <p className="report__dates">Último cambio: {report.reviewedBy}</p>}
       <NearbyWarning nearby={nearby} />
+      {report.status === "aprobado" && report.fixedVotes > 0 && (
+        <p className="fixed-hint">
+          ✅ <strong>{report.fixedVotes === 1 ? "1 vecino dice" : `${report.fixedVotes} vecinos dicen`}</strong> que ya
+          se arregló. Revisa y márcalo como arreglado si es así.
+        </p>
+      )}
       {report.photoUrl && (
         <a href={report.photoUrl} target="_blank" rel="noreferrer" className="report__photo">
           {/* eslint-disable-next-line @next/next/no-img-element -- fotos ya comprimidas, servidas desde Blob */}
