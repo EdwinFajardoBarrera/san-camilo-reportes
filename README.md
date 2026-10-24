@@ -22,7 +22,7 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 
 ### Flujo de un reporte
 
-1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle, una descripción y agrega una foto. Para **calles sin pavimentar** se marca la calle completa: al tocarla se dibuja sola con los datos de OpenStreetMap, o se traza a mano punto por punto.
+1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle y una descripción. Por ahora solo el equipo (admin y colaboradores, con sesión iniciada) puede agregar una foto, y no tiene el límite de reportes por hora. Para **calles sin pavimentar** se marca la calle completa: al tocarla se dibuja sola con los datos de OpenStreetMap, o se traza a mano punto por punto.
 2. El reporte se guarda como **Pendiente**.
 3. El administrador o un colaborador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
 4. Los aprobados aparecen en el mapa público, con la fecha del reporte y los días que lleva sin arreglarse. Al alejar el zoom se agrupan con números.
@@ -36,7 +36,7 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 ### Protecciones
 
 - Solo se aceptan puntos dentro del contorno de la colonia (validado en el servidor).
-- Máximo 5 reportes por hora por persona y un campo trampa contra bots.
+- Máximo 5 reportes por hora por persona (el equipo con sesión no tiene límite) y un campo trampa contra bots.
 - Panel con cuentas propias: contraseñas guardadas solo como hash **scrypt** con sal (parámetros de OWASP), sesión firmada (cookie `httpOnly`) que se comprueba contra la base en cada petición, y bloqueo tras 5 intentos fallidos por IP o 10 por cuenta.
 
 ### Cuentas del panel
@@ -113,7 +113,7 @@ Comandos útiles: `npm run lint`, `npm run typecheck`, `npm test`, `npm run buil
 
 ### 3. Fotos con Vercel Blob
 
-En Vercel: tu proyecto → **Storage** → **Create** → **Blob** → conéctalo al proyecto (entornos Production y Preview). Vercel agrega sola la variable `BLOB_READ_WRITE_TOKEN`. Después haz **Redeploy**. Sin esa variable la app funciona igual, solo oculta el campo de foto.
+En Vercel: tu proyecto → **Storage** → **Create** → **Blob** → conéctalo al proyecto (entornos Production y Preview). Vercel agrega sola la variable `BLOB_READ_WRITE_TOKEN`. Después haz **Redeploy**. Sin esa variable la app funciona igual, solo oculta el campo de foto. Aunque esté configurado, el campo solo aparece para el equipo con sesión iniciada y el servidor rechaza fotos de vecinos sin sesión.
 
 ### Migraciones
 
