@@ -133,10 +133,10 @@ export function popupContent(
       button.type = "button";
       const markDone = () => {
         button.disabled = true;
-        button.textContent = "✓ Gracias, avisamos al equipo";
+        button.textContent = "✓ Avisaste que se arregló. Gracias";
       };
       if (fixedVoted) markDone();
-      else button.textContent = "✅ Ya lo arreglaron";
+      else button.textContent = "📣 Avisar que ya se arregló";
       button.addEventListener("click", async () => {
         button.disabled = true;
         try {

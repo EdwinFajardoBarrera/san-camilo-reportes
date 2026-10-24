@@ -147,8 +147,9 @@ button, input, textarea { font: inherit; }
 .btn--support:disabled { opacity: 1; background: #dcfce7; color: #166534; border-color: #bbf7d0; cursor: default; }
 .fixed-vote { display: flex; flex-direction: column; gap: 6px; }
 .fixed-vote__count { font-size: 0.85rem; font-weight: 600; color: #166534; }
-.btn--fixed-vote { background: #f0fdf4; color: #166534; border-color: #bbf7d0; min-height: 40px; }
-.btn--fixed-vote:disabled { opacity: 1; cursor: default; }
+.btn.btn--fixed-vote { width: 100%; min-height: 44px; background: #16a34a; color: #fff; border-color: #15803d; font-weight: 600; box-shadow: 0 2px 0 #15803d; }
+.btn.btn--fixed-vote:active { transform: translateY(1px); box-shadow: none; }
+.btn.btn--fixed-vote:disabled { opacity: 1; cursor: default; background: #f0fdf4; color: #166534; border-color: #bbf7d0; box-shadow: none; }
 .popup__facts { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
 .popup__row { display: flex; justify-content: space-between; gap: 12px; }
 .popup__label { color: var(--muted); }
