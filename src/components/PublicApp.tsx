@@ -21,25 +21,29 @@ type Mode = "view" | "choose" | "locate" | "form" | "draw";
 // Espacio que ocupan los paneles flotantes sobre el mapa.
 const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 const SUPPORTED_KEY = "sc-apoyos";
+const FIXED_VOTED_KEY = "sc-arreglados";
 
 /** Paso al que regresa el botón "atrás" del celular. */
 const PREVIOUS: Record<Mode, Mode> = { view: "view", choose: "view", locate: "choose", form: "locate", draw: "locate" };
 
-function readSupported(): Set<string> {
+/** Reportes que este navegador ya apoyó o marcó como arreglados. */
+function readIds(key: string): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(SUPPORTED_KEY) ?? "[]"));
+    return new Set(JSON.parse(localStorage.getItem(key) ?? "[]"));
   } catch {
     return new Set();
   }
 }
 
-function rememberSupported(id: string) {
+function rememberId(key: string, id: string) {
   try {
-    localStorage.setItem(SUPPORTED_KEY, JSON.stringify([...readSupported().add(id)]));
+    localStorage.setItem(key, JSON.stringify([...readIds(key).add(id)]));
   } catch {
-    // Sin almacenamiento local: solo no recordamos el apoyo en este navegador.
+    // Sin almacenamiento local: solo no lo recordamos en este navegador.
   }
 }
+
+const readSupported = () => readIds(SUPPORTED_KEY);
 
 type Props = { initialReports: Report[]; isStaff: boolean; photosEnabled: boolean };
 
@@ -263,7 +267,16 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
     const res = await fetch(`/api/reports/${id}/support`, { method: "POST" });
     if (!res.ok) throw new Error("No se pudo registrar el apoyo");
     const { count } = (await res.json()) as { count: number };
-    rememberSupported(id);
+    rememberId(SUPPORTED_KEY, id);
+    router.refresh();
+    return count;
+  }
+
+  async function handleFixedVote(id: string): Promise<number> {
+    const res = await fetch(`/api/reports/${id}/fixed`, { method: "POST" });
+    if (!res.ok) throw new Error("No se pudo registrar el aviso");
+    const { count } = (await res.json()) as { count: number };
+    rememberId(FIXED_VOTED_KEY, id);
     router.refresh();
     return count;
   }
@@ -283,6 +296,8 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
         onMarkFixed={isStaff ? handleMarkFixed : undefined}
         onSupport={handleSupport}
         hasSupported={(id) => readSupported().has(id)}
+        onFixedVote={isStaff ? undefined : handleFixedVote}
+        hasFixedVoted={(id) => readIds(FIXED_VOTED_KEY).has(id)}
         padding={MAP_PADDING}
         userLocation={userLocation}
       />

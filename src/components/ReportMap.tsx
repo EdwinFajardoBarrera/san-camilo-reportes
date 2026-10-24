@@ -48,6 +48,9 @@ type Props = {
   /** Apoyar una iniciativa; devuelve el nuevo total. */
   onSupport?: (id: string) => Promise<number>;
   hasSupported?: (id: string) => boolean;
+  /** Avisar que ya se arregló; devuelve el nuevo total. */
+  onFixedVote?: (id: string) => Promise<number>;
+  hasFixedVoted?: (id: string) => boolean;
   /** Espacio que tapan los paneles flotantes, para encuadrar la colonia. */
   padding?: { top: number; bottom: number; left: number; right: number };
   /** Punto azul con la ubicación del vecino, como en Google Maps. */
@@ -259,6 +262,8 @@ export function ReportMap({
   onMarkFixed,
   onSupport,
   hasSupported,
+  onFixedVote,
+  hasFixedVoted,
   padding,
   userLocation,
 }: Props) {
@@ -271,11 +276,11 @@ export function ReportMap({
   // Refs para que los manejadores de eventos vean siempre los valores actuales.
   const onPickRef = useRef(onPick);
   const reportsRef = useRef(reports);
-  const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported });
+  const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted });
   useEffect(() => {
     onPickRef.current = onPick;
     reportsRef.current = reports;
-    popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported };
+    popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted };
   });
 
   // Crear el mapa una sola vez.
@@ -437,7 +442,7 @@ export function ReportMap({
         map.setFilter("street-selected", ["==", ["get", "id"], report.id]);
         popup.on("close", () => map.setFilter("street-selected", ["==", ["get", "id"], ""]));
       }
-      const { showStatus, onMarkFixed, onSupport, hasSupported } = popupOptions.current;
+      const { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted } = popupOptions.current;
       const markFixed =
         onMarkFixed &&
         (async (reportId: string) => {
@@ -452,6 +457,8 @@ export function ReportMap({
             onMarkFixed: markFixed,
             onSupport,
             supported: hasSupported?.(report.id) ?? false,
+            onFixedVote,
+            fixedVoted: hasFixedVoted?.(report.id) ?? false,
           }),
         )
         .addTo(map);
