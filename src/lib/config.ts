@@ -67,8 +67,10 @@ export const PUBLIC_STATUSES: Status[] = ["aprobado", "resuelto"];
 
 /** Máximo de reportes por persona (IP) en una ventana de tiempo. */
 export const REPORT_RATE_LIMIT = { max: 5, windowMinutes: 60 };
-/** Máximo de intentos fallidos de acceso al panel. */
-export const LOGIN_RATE_LIMIT = { max: 5, windowMinutes: 15 };
+/** Máximo de intentos fallidos de acceso al panel, por IP y por cuenta. */
+export const LOGIN_RATE_LIMIT = { max: 5, maxPerAccount: 10, windowMinutes: 15 };
+/** Largo permitido de las contraseñas del panel. */
+export const PASSWORD = { min: 10, max: 128 };
 
 /** Fotos: tamaño máximo aceptado (ya comprimidas en el navegador) y dimensión mayor. */
 export const PHOTO = { maxBytes: 1_000_000, maxDimension: 1280, quality: 0.72 };

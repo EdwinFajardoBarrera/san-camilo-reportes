@@ -41,9 +41,9 @@ function rememberSupported(id: string) {
   }
 }
 
-type Props = { initialReports: Report[]; isAdmin: boolean; photosEnabled: boolean };
+type Props = { initialReports: Report[]; isStaff: boolean; photosEnabled: boolean };
 
-export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
+export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
   const router = useRouter();
   const mapApi = useRef<MapApi | null>(null);
   const [active, setActive] = useState<Set<Category>>(() => new Set(CATEGORY_KEYS));
@@ -280,7 +280,7 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
         draftPath={mode === "draw" ? [manualLine] : isStreet && mode === "form" ? street?.lines : null}
         focusPath={mode === "form"}
         onPick={mode === "draw" ? addDrawPoint : undefined}
-        onMarkFixed={isAdmin ? handleMarkFixed : undefined}
+        onMarkFixed={isStaff ? handleMarkFixed : undefined}
         onSupport={handleSupport}
         hasSupported={(id) => readSupported().has(id)}
         padding={MAP_PADDING}
@@ -298,8 +298,8 @@ export function PublicApp({ initialReports, isAdmin, photosEnabled }: Props) {
               {visible.length} {visible.length === 1 ? "problema" : "problemas"} en el mapa · {NEIGHBORHOOD.city}
             </p>
           </div>
-          {/* Solo para el administrador ya autenticado; para entrar se va directo a /admin. */}
-          {isAdmin && (
+          {/* Solo para el equipo ya autenticado; para entrar se va directo a /admin. */}
+          {isStaff && (
             <a className="icon-link" href="/admin" aria-label="Panel de administración" title="Administración">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
                 <path

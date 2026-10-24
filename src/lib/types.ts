@@ -18,4 +18,6 @@ export type Report = {
   /** Nombre que el vecino eligió mostrar; null si es anónimo. */
   reporterName: string | null;
   supportCount: number;
+  /** Usuario del equipo que hizo el último cambio de estado. Solo en el panel. */
+  reviewedBy?: string | null;
 };

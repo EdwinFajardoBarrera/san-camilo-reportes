@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newReportSchema } from "./validation";
+import { newPasswordSchema, newReportSchema, usernameSchema } from "./validation";
 
 const base = { category: "bache", lat: 20.9728205, lng: -89.552488 };
 
@@ -65,5 +65,21 @@ describe("nombre del vecino", () => {
 
   it("limita el largo", () => {
     expect(newReportSchema.safeParse({ ...base, reporterName: "a".repeat(61) }).success).toBe(false);
+  });
+});
+
+describe("cuentas", () => {
+  it("normaliza el usuario a minúsculas", () => {
+    expect(usernameSchema.parse("  Maria.Lopez ")).toBe("maria.lopez");
+    expect(usernameSchema.safeParse("ma").success).toBe(false);
+    expect(usernameSchema.safeParse("maría").success).toBe(false);
+  });
+
+  it("pide contraseñas largas, iguales y sin el usuario", () => {
+    const ok = { username: "maria", password: "calle-47-sin-luz", confirm: "calle-47-sin-luz" };
+    expect(newPasswordSchema.safeParse(ok).success).toBe(true);
+    expect(newPasswordSchema.safeParse({ ...ok, password: "corta", confirm: "corta" }).success).toBe(false);
+    expect(newPasswordSchema.safeParse({ ...ok, confirm: "otra-distinta" }).success).toBe(false);
+    expect(newPasswordSchema.safeParse({ ...ok, password: "soy-maria-123", confirm: "soy-maria-123" }).success).toBe(false);
   });
 });

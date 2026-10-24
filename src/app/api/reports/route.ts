@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth";
+import { isStaff } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { PHOTO, REPORT_RATE_LIMIT } from "@/lib/config";
 import { createReport, listPublicReports, recentReportsBy } from "@/lib/reports";
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
   }
 
   const reporterHash = anonymize(await getClientIp());
-  // El administrador puede cargar muchos reportes seguidos (por ejemplo, al recorrer la colonia).
-  if (!(await isAdmin()) && (await recentReportsBy(reporterHash)) >= REPORT_RATE_LIMIT.max) {
+  // El equipo (admin y colaboradores) puede cargar muchos reportes seguidos (por ejemplo, al recorrer la colonia).
+  if (!(await isStaff()) && (await recentReportsBy(reporterHash)) >= REPORT_RATE_LIMIT.max) {
     return error(
       `Por seguridad se permiten ${REPORT_RATE_LIMIT.max} reportes por hora desde la misma conexión. Intenta de nuevo más tarde.`,
       429,

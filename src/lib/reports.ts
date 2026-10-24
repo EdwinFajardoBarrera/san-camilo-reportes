@@ -21,6 +21,7 @@ type Row = {
   photo_url: string | null;
   reporter_name: string | null;
   support_count: number;
+  reviewed_by: string | null;
 };
 
 const toReport = (r: Row): Report => ({
@@ -37,9 +38,10 @@ const toReport = (r: Row): Report => ({
   photoUrl: r.photo_url,
   reporterName: r.reporter_name,
   supportCount: r.support_count,
+  reviewedBy: r.reviewed_by,
 });
 
-const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, reporter_name,
+const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, reporter_name, reviewed_by,
   (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count`;
 
 export async function listPublicReports(): Promise<Report[]> {
@@ -47,7 +49,8 @@ export async function listPublicReports(): Promise<Report[]> {
     `SELECT ${COLUMNS} FROM reports WHERE status = ANY($1) ORDER BY created_at DESC LIMIT 2000`,
     [PUBLIC_STATUSES],
   );
-  return rows.map(toReport);
+  // El público no ve quién del equipo revisó cada reporte.
+  return rows.map((row) => ({ ...toReport(row), reviewedBy: undefined }));
 }
 
 export async function listReportsByStatus(status: Status): Promise<Report[]> {
@@ -105,9 +108,14 @@ export async function createReport(
 /**
  * Cambia el estado de un reporte. Al marcarlo como arreglado se guarda la fecha
  * indicada (o la actual); nunca antes de la fecha del reporte. Al rechazarlo se
- * quita la foto. Devuelve la URL de la foto que haya que borrar del almacenamiento.
+ * quita la foto. Se guarda quién hizo el cambio. Devuelve la URL de la foto que haya que borrar del almacenamiento.
  */
-export async function setReportStatus(id: string, status: Status, resolvedAt?: Date): Promise<string | null> {
+export async function setReportStatus(
+  id: string,
+  status: Status,
+  reviewedBy: string,
+  resolvedAt?: Date,
+): Promise<string | null> {
   const reviewed = status === "aprobado" || status === "rechazado";
   const resolved = status === "resuelto";
   const rejected = status === "rechazado";
@@ -117,10 +125,11 @@ export async function setReportStatus(id: string, status: Status, resolvedAt?: D
        status = $2,
        reviewed_at = CASE WHEN $3 THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END,
        resolved_at = CASE WHEN $4 THEN GREATEST(created_at, COALESCE($5::timestamptz, now())) ELSE NULL END,
-       photo_url = CASE WHEN $6 THEN NULL ELSE photo_url END
+       photo_url = CASE WHEN $6 THEN NULL ELSE photo_url END,
+       reviewed_by = $7
      WHERE id = $1
      RETURNING CASE WHEN $6 THEN (SELECT photo_url FROM old) END AS removed_photo`,
-    [id, status, reviewed, resolved, resolvedAt ?? null, rejected],
+    [id, status, reviewed, resolved, resolvedAt ?? null, rejected, reviewedBy],
   );
   return rows[0]?.removed_photo ?? null;
 }

@@ -24,7 +24,7 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 
 1. El vecino toca **"+ Reportar problema"**, marca el punto (o usa su ubicación), elige la categoría y opcionalmente escribe la calle, una descripción y agrega una foto. Para **calles sin pavimentar** se marca la calle completa: al tocarla se dibuja sola con los datos de OpenStreetMap, o se traza a mano punto por punto.
 2. El reporte se guarda como **Pendiente**.
-3. El administrador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
+3. El administrador o un colaborador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
 4. Los aprobados aparecen en el mapa público, con la fecha del reporte y los días que lleva sin arreglarse. Al alejar el zoom se agrupan con números.
 5. Cuando se arregla, el admin lo marca como **Arreglado** (desde el panel, con fecha, o desde el globo del mapa). Se guarda la fecha y se muestra cuántos días tardó; se ven con el filtro "Arreglados".
 
@@ -37,7 +37,22 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 
 - Solo se aceptan puntos dentro del contorno de la colonia (validado en el servidor).
 - Máximo 5 reportes por hora por persona y un campo trampa contra bots.
-- Panel protegido con contraseña, sesión firmada (cookie `httpOnly`) y bloqueo tras 5 intentos fallidos.
+- Panel con cuentas propias: contraseñas guardadas solo como hash **scrypt** con sal (parámetros de OWASP), sesión firmada (cookie `httpOnly`) que se comprueba contra la base en cada petición, y bloqueo tras 5 intentos fallidos por IP o 10 por cuenta.
+
+### Cuentas del panel
+
+| | Administrador | Colaborador |
+| --- | --- | --- |
+| Aprobar, rechazar, ocultar, marcar arreglado | ✅ | ✅ |
+| Eliminar reportes | ✅ | ❌ |
+| Crear, desactivar o eliminar colaboradores y ponerles contraseña temporal | ✅ | ❌ |
+| Cambiar su propia contraseña | ✅ | ✅ |
+
+- Solo puede haber **un administrador** (lo impide un índice único en la base).
+- **Primera vez:** con la tabla `users` vacía, `/admin` muestra "Crea tu cuenta de administrador". Se escribe la contraseña de `ADMIN_PASSWORD` y se eligen usuario y contraseña nuevos. Después la variable ya no sirve y se borra de Vercel.
+- Los colaboradores reciben una contraseña temporal y deben cambiarla al entrar. Cambiar o restablecer una contraseña, o desactivar la cuenta, cierra sus sesiones abiertas.
+- Cada reporte guarda qué usuario hizo el último cambio de estado (solo se ve en el panel).
+- **Si el administrador olvida su contraseña:** en el SQL Editor de Neon corre `DELETE FROM users WHERE role = 'admin';`, vuelve a poner `ADMIN_PASSWORD` en Vercel, redeploy y repite la primera vez. Los colaboradores no se borran.
 
 ## Estructura
 
@@ -45,8 +60,8 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 db/migrations/      Esquema SQL versionado (se aplica con npm run db:migrate)
 db/seed.sql         Reportes iniciales del mapa original de Google My Maps
 src/lib/config.ts   Contorno de la colonia, categorías y límites  ← personalizable
-src/lib/            Acceso a datos, validación, autenticación
-src/app/            Páginas (/ y /admin) y API (/api/reports)
+src/lib/            Acceso a datos, validación, cuentas y autenticación
+src/app/            Páginas (/, /admin, /admin/usuarios, /admin/cuenta) y API (/api/reports)
 src/components/     Mapa y formulario
 ```
 
@@ -91,7 +106,7 @@ Comandos útiles: `npm run lint`, `npm run typecheck`, `npm test`, `npm run buil
    | Variable | Valor |
    | --- | --- |
    | `DATABASE_URL` | La cadena de Neon (con `-pooler`) |
-   | `ADMIN_PASSWORD` | Una contraseña larga que solo tú conozcas |
+   | `ADMIN_PASSWORD` | Contraseña larga y temporal: solo sirve para crear tu cuenta de administrador en `/admin`; luego se borra |
    | `SESSION_SECRET` | Texto aleatorio de 32+ caracteres (`openssl rand -base64 48`) |
 
 4. **Deploy**. En un minuto tendrás una URL como `san-camilo-reportes.vercel.app`.

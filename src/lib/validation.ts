@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CATEGORY_KEYS, NEIGHBORHOOD, categoryConfig, type Category, type LatLng } from "./config";
+import { CATEGORY_KEYS, NEIGHBORHOOD, PASSWORD, categoryConfig, type Category, type LatLng } from "./config";
 import { isPointInPolygon, paddedBounds, representativePoint, type Line } from "./geo";
 
 const optionalText = (max: number) =>
@@ -70,3 +70,24 @@ export const newReportSchema = z
   });
 
 export type NewReport = z.infer<typeof newReportSchema>;
+
+/** Nombre de usuario del panel: minúsculas (los teléfonos ponen mayúscula inicial sola). */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9._-]{3,32}$/, "Usuario de 3 a 32 caracteres: letras sin acentos, números, punto, guion o guion bajo");
+
+export const passwordSchema = z
+  .string()
+  .min(PASSWORD.min, `La contraseña debe tener al menos ${PASSWORD.min} caracteres`)
+  .max(PASSWORD.max, `La contraseña debe tener máximo ${PASSWORD.max} caracteres`);
+
+/** Contraseña nueva escrita dos veces, distinta del nombre de usuario. */
+export const newPasswordSchema = z
+  .object({ username: z.string(), password: passwordSchema, confirm: z.string() })
+  .refine((v) => v.password === v.confirm, { message: "Las contraseñas no coinciden", path: ["confirm"] })
+  .refine((v) => !v.password.toLowerCase().includes(v.username.toLowerCase()), {
+    message: "La contraseña no debe contener el nombre de usuario",
+    path: ["password"],
+  });
