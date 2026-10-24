@@ -50,12 +50,15 @@ export async function POST(request: Request) {
   });
   if (!parsed.success) return error(parsed.error.issues[0]?.message ?? "Datos inválidos", 422);
 
+  // Por ahora solo el equipo (admin y colaboradores) puede adjuntar fotos y no tiene límite de reportes.
+  const staff = await isStaff();
+
   // Validar la foto antes de contar el envío.
   const photo = form.get("photo");
   let photoBytes: Uint8Array | null = null;
   let photoKind: ReturnType<typeof detectImageType> = null;
   if (photo instanceof File && photo.size > 0) {
-    if (!photosEnabled()) return error("Las fotos no están disponibles por ahora", 422);
+    if (!photosEnabled() || !staff) return error("Las fotos no están disponibles por ahora", 403);
     if (photo.size > PHOTO.maxBytes) return error("La foto es demasiado grande", 413);
     photoBytes = new Uint8Array(await photo.arrayBuffer());
     photoKind = detectImageType(photoBytes);
@@ -63,8 +66,8 @@ export async function POST(request: Request) {
   }
 
   const reporterHash = anonymize(await getClientIp());
-  // El equipo (admin y colaboradores) puede cargar muchos reportes seguidos (por ejemplo, al recorrer la colonia).
-  if (!(await isStaff()) && (await recentReportsBy(reporterHash)) >= REPORT_RATE_LIMIT.max) {
+  // El equipo puede cargar muchos reportes seguidos (por ejemplo, al recorrer la colonia).
+  if (!staff && (await recentReportsBy(reporterHash)) >= REPORT_RATE_LIMIT.max) {
     return error(
       `Por seguridad se permiten ${REPORT_RATE_LIMIT.max} reportes por hora desde la misma conexión. Intenta de nuevo más tarde.`,
       429,
