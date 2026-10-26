@@ -306,6 +306,44 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
   const reporting = mode !== "view";
   const cat = category ? CATEGORIES[category] : null;
 
+  // Botones redondos que se apilan encima del zoom del mapa.
+  const mapControls = mode === "view" && (
+    <>
+      {isAdmin && (
+        <button
+          type="button"
+          className="map-btn expand-pins"
+          aria-label={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
+          title={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
+          aria-pressed={expanded}
+          onClick={toggleExpanded}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M7 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5A1.5 1.5 0 1 1 7 4.5a1.5 1.5 0 0 1 0 3zM17 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM12 10a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"
+            />
+          </svg>
+        </button>
+      )}
+      <button
+        type="button"
+        className="map-btn locate-me"
+        aria-label="Mostrar mi ubicación"
+        aria-pressed={locationStatus === "on"}
+        onClick={showMyLocation}
+        disabled={locating}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden>
+          <path
+            fill="currentColor"
+            d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"
+          />
+        </svg>
+      </button>
+    </>
+  );
+
   return (
     <main className={`app${reporting ? " app--reporting" : ""}`}>
       <ReportMap
@@ -323,6 +361,7 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
         padding={MAP_PADDING}
         userLocation={userLocation}
         cluster={!(isAdmin && expanded)}
+        controls={mapControls}
       />
 
       <div className="overlay-top">
@@ -388,42 +427,6 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
           </div>
         )}
       </div>
-
-      {mode === "view" && (
-        <button
-          type="button"
-          className="map-btn locate-me"
-          aria-label="Mostrar mi ubicación"
-          aria-pressed={locationStatus === "on"}
-          onClick={showMyLocation}
-          disabled={locating}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden>
-            <path
-              fill="currentColor"
-              d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"
-            />
-          </svg>
-        </button>
-      )}
-
-      {mode === "view" && isAdmin && (
-        <button
-          type="button"
-          className="map-btn expand-pins"
-          aria-label={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
-          title={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
-          aria-pressed={expanded}
-          onClick={toggleExpanded}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden>
-            <path
-              fill="currentColor"
-              d="M7 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5A1.5 1.5 0 1 1 7 4.5a1.5 1.5 0 0 1 0 3zM17 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM12 10a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"
-            />
-          </svg>
-        </button>
-      )}
 
       {mode === "view" && (
         <button type="button" className="btn btn--primary fab" onClick={startReport}>
