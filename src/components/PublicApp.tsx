@@ -6,6 +6,7 @@ import { markFixed } from "@/app/admin/actions";
 import { CATEGORIES, CATEGORY_KEYS, NEIGHBORHOOD, categoryConfig, type Category, type LatLng } from "@/lib/config";
 import { isPointInPolygon, type Line } from "@/lib/geo";
 import type { Report } from "@/lib/types";
+import { ExpandPinsButton, useExpandedPins } from "./ExpandPins";
 import { ReportMap } from "./MapLoader";
 import type { MapApi } from "./ReportMap";
 import { ReportForm, type StreetSelection } from "./ReportForm";
@@ -22,7 +23,6 @@ type Mode = "view" | "choose" | "locate" | "form" | "draw";
 const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 const SUPPORTED_KEY = "sc-apoyos";
 const FIXED_VOTED_KEY = "sc-arreglados";
-const EXPAND_KEY = "sc-expandir-marcadores";
 
 /** Paso al que regresa el botón "atrás" del celular. */
 const PREVIOUS: Record<Mode, Mode> = { view: "view", choose: "view", locate: "choose", form: "locate", draw: "locate" };
@@ -64,26 +64,7 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
   const [notice, setNotice] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   // Solo el admin puede ver cada marcador por separado en lugar de los círculos con número.
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (isAdmin && localStorage.getItem(EXPAND_KEY) === "1") setExpanded(true);
-    } catch {
-      // Sin almacenamiento local: empieza agrupado.
-    }
-  }, [isAdmin]);
-
-  function toggleExpanded() {
-    setExpanded((prev) => {
-      try {
-        localStorage.setItem(EXPAND_KEY, prev ? "0" : "1");
-      } catch {
-        // Sin almacenamiento local: solo no lo recordamos.
-      }
-      return !prev;
-    });
-  }
+  const { expanded, toggle: toggleExpanded } = useExpandedPins(isAdmin);
 
   const modeRef = useRef(mode);
   const sentRef = useRef(sent);
@@ -309,23 +290,7 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
   // Botones redondos que se apilan encima del zoom del mapa.
   const mapControls = mode === "view" && (
     <>
-      {isAdmin && (
-        <button
-          type="button"
-          className="map-btn expand-pins"
-          aria-label={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
-          title={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
-          aria-pressed={expanded}
-          onClick={toggleExpanded}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden>
-            <path
-              fill="currentColor"
-              d="M7 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5A1.5 1.5 0 1 1 7 4.5a1.5 1.5 0 0 1 0 3zM17 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM12 10a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"
-            />
-          </svg>
-        </button>
-      )}
+      {isAdmin && <ExpandPinsButton expanded={expanded} onToggle={toggleExpanded} />}
       <button
         type="button"
         className="map-btn locate-me"
@@ -360,7 +325,7 @@ export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: P
         hasFixedVoted={(id) => readIds(FIXED_VOTED_KEY).has(id)}
         padding={MAP_PADDING}
         userLocation={userLocation}
-        cluster={!(isAdmin && expanded)}
+        cluster={!expanded}
         controls={mapControls}
       />
 
