@@ -64,7 +64,13 @@ type Props = {
   cluster?: boolean;
   /** Botones extra que se apilan encima del zoom, sin encimarse con él. */
   controls?: ReactNode;
+  /** Reportes de referencia que se ven tenues, debajo de los demás y sin agrupar. */
+  faded?: Report[];
 };
+
+/** Opacidad de los reportes de referencia (`faded`). */
+const FADED_OPACITY = 0.45;
+const NO_REPORTS: Report[] = [];
 
 const BRAND = "#0f766e";
 const CLUSTER_OPTIONS = { clusterRadius: 48, clusterMaxZoom: 16 };
@@ -280,6 +286,7 @@ export function ReportMap({
   userLocation,
   cluster = true,
   controls,
+  faded = NO_REPORTS,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -292,12 +299,14 @@ export function ReportMap({
   const onPickRef = useRef(onPick);
   const onSelectRef = useRef(onSelect);
   const reportsRef = useRef(reports);
+  const fadedRef = useRef(faded);
   const clusterRef = useRef(cluster);
   const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList });
   useEffect(() => {
     onPickRef.current = onPick;
     onSelectRef.current = onSelect;
     reportsRef.current = reports;
+    fadedRef.current = faded;
     popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList };
   });
 
@@ -343,6 +352,33 @@ export function ReportMap({
         type: "line",
         source: "outside",
         paint: { "line-color": BRAND, "line-width": 2.5, "line-opacity": 0.8 },
+      });
+
+      // Reportes de referencia: debajo de todo lo demás y semitransparentes.
+      map.addSource("faded-lines", { type: "geojson", data: toLines(fadedRef.current) });
+      map.addLayer({
+        id: "faded-lines",
+        type: "line",
+        source: "faded-lines",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["case", ["get", "resolved"], "#16a34a", "#78716c"],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 13, 2.5, 18, 8],
+          "line-opacity": FADED_OPACITY,
+        },
+      });
+      map.addSource("faded", { type: "geojson", data: toFeatures(fadedRef.current) });
+      map.addLayer({
+        id: "faded-pins",
+        type: "symbol",
+        source: "faded",
+        layout: {
+          "icon-image": ["get", "icon"],
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "symbol-z-order": "viewport-y",
+        },
+        paint: { "icon-opacity": FADED_OPACITY },
       });
 
       map.addSource("street-lines", { type: "geojson", data: toLines(reportsRef.current) });
@@ -457,7 +493,7 @@ export function ReportMap({
     });
 
     const openPopup = (id: string, at: [number, number], offset: [number, number]) => {
-      const report = reportsRef.current.find((r) => r.id === id);
+      const report = reportsRef.current.find((r) => r.id === id) ?? fadedRef.current.find((r) => r.id === id);
       if (!report) return;
       const popup = new maplibregl.Popup({ offset, maxWidth: "300px", closeButton: false });
       // Resaltar el trazo de la calle mientras su globo está abierto.
@@ -495,6 +531,15 @@ export function ReportMap({
       if (feature?.geometry.type === "Point") {
         openPopup(feature.properties.id, feature.geometry.coordinates as [number, number], [0, -46]);
         onSelectRef.current?.(feature.properties.id);
+      }
+    });
+    map.on("click", "faded-pins", (e) => {
+      if (onPickRef.current) return;
+      // Los reportes principales van encima: si el clic cae en uno, ese abre su globo.
+      if (map.queryRenderedFeatures(e.point, { layers: ["pins", "clusters"] }).length) return;
+      const feature = e.features?.[0];
+      if (feature?.geometry.type === "Point") {
+        openPopup(feature.properties.id, feature.geometry.coordinates as [number, number], [0, -46]);
       }
     });
     map.on("click", "street-lines", (e) => {
@@ -548,7 +593,7 @@ export function ReportMap({
 
     map.on("click", (e) => onPickRef.current?.([e.lngLat.lat, e.lngLat.lng]));
 
-    for (const layer of ["clusters", "pins", "street-lines"]) {
+    for (const layer of ["clusters", "pins", "street-lines", "faded-pins"]) {
       map.on("mouseenter", layer, () => {
         if (!onPickRef.current) map.getCanvas().style.cursor = "pointer";
       });
@@ -581,6 +626,13 @@ export function ReportMap({
     mapRef.current?.getSource<GeoJSONSource>("reports")?.setData(toFeatures(reports));
     mapRef.current?.getSource<GeoJSONSource>("street-lines")?.setData(toLines(reports));
   }, [ready, reports]);
+
+  // Actualizar los reportes de referencia.
+  useEffect(() => {
+    if (!ready) return;
+    mapRef.current?.getSource<GeoJSONSource>("faded")?.setData(toFeatures(faded));
+    mapRef.current?.getSource<GeoJSONSource>("faded-lines")?.setData(toLines(faded));
+  }, [ready, faded]);
 
   // Trazo de la calle en edición.
   useEffect(() => {

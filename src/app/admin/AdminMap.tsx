@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExpandPinsButton, useExpandedPins } from "@/components/ExpandPins";
+import { LocateButton } from "@/components/LocateButton";
 import { ReportMap } from "@/components/MapLoader";
 import type { MapApi } from "@/components/ReportMap";
+import { useUserLocation } from "@/components/useUserLocation";
+import { NEIGHBORHOOD } from "@/lib/config";
+import { isPointInPolygon } from "@/lib/geo";
 import type { Report } from "@/lib/types";
 
 /** Controles de la tarjeta que no deben mover el mapa al tocarlos. */
@@ -49,12 +53,33 @@ function showInList(id: string) {
 /**
  * Mapa del panel. Al tocar una tarjeta de reporte (`data-report-id`), el mapa
  * va a ese reporte y abre su globo; al tocar un pin, se resalta su tarjeta.
- * El admin puede ver cada marcador sin agrupar.
+ * El admin puede ver cada marcador sin agrupar. `nearby` son reportes ya
+ * aprobados cerca de los de la lista; se ven tenues, solo como referencia.
  */
-export function AdminMap({ reports, isAdmin = false }: { reports: Report[]; isAdmin?: boolean }) {
+export function AdminMap({
+  reports,
+  nearby,
+  isAdmin = false,
+}: {
+  reports: Report[];
+  nearby?: Report[];
+  isAdmin?: boolean;
+}) {
   const api = useRef<MapApi | null>(null);
   const { expanded, toggle } = useExpandedPins(isAdmin);
   const section = useRef<HTMLElement>(null);
+  const { location, status: locationStatus, start: startLocation } = useUserLocation();
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function showMyLocation() {
+    const loc = location ?? (await startLocation());
+    if (!loc) return setNotice("No pudimos obtener tu ubicación. Revisa que el navegador tenga permiso.");
+    if (!isPointInPolygon([loc.lat, loc.lng], NEIGHBORHOOD.polygon)) {
+      return setNotice(`Parece que no estás en ${NEIGHBORHOOD.name}.`);
+    }
+    setNotice(null);
+    api.current?.flyTo([loc.lat, loc.lng], Math.max(api.current.getZoom(), 17));
+  }
 
   useEffect(() => {
     function focus(card: HTMLElement) {
@@ -97,8 +122,27 @@ export function AdminMap({ reports, isAdmin = false }: { reports: Report[]; isAd
         onSelect={selectFromMap}
         onShowInList={showInList}
         cluster={!expanded}
-        controls={isAdmin && <ExpandPinsButton expanded={expanded} onToggle={toggle} />}
+        faded={nearby}
+        userLocation={location}
+        controls={
+          <>
+            {isAdmin && <ExpandPinsButton expanded={expanded} onToggle={toggle} />}
+            <LocateButton
+              active={locationStatus === "on"}
+              disabled={locationStatus === "searching"}
+              onClick={showMyLocation}
+            />
+          </>
+        }
       />
+      {notice && (
+        <div className="panel toast map-toast" role="status">
+          {notice}
+          <button type="button" aria-label="Cerrar aviso" className="toast__close" onClick={() => setNotice(null)}>
+            ×
+          </button>
+        </div>
+      )}
     </section>
   );
 }

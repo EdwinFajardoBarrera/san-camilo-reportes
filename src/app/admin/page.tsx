@@ -168,6 +168,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   ]);
   const reports = applyAdminView(all, view);
   const groups = groupNearby(reports);
+  // Aprobados cerca de algún pendiente: se ven tenues en el mapa como referencia.
+  const nearbyApproved = [
+    ...new Map(
+      reports.flatMap((r) => nearbyPublished(r, published)).map(({ report }) => [report.id, report] as const),
+    ).values(),
+  ].filter((r) => r.status === "aprobado");
   const typeCounts = Object.fromEntries(CATEGORY_KEYS.map((k) => [k, all.filter((r) => r.category === k).length]));
 
   return (
@@ -183,7 +189,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </nav>
 
       <div className="admin__body">
-        <AdminMap reports={reports} isAdmin={canDelete} />
+        <AdminMap reports={reports} nearby={nearbyApproved} isAdmin={canDelete} />
         <section className="admin__list">
           {all.length > 0 && (
             <div className="list-tools">
