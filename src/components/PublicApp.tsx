@@ -22,6 +22,7 @@ type Mode = "view" | "choose" | "locate" | "form" | "draw";
 const MAP_PADDING = { top: 150, bottom: 90, left: 24, right: 24 };
 const SUPPORTED_KEY = "sc-apoyos";
 const FIXED_VOTED_KEY = "sc-arreglados";
+const EXPAND_KEY = "sc-expandir-marcadores";
 
 /** Paso al que regresa el botón "atrás" del celular. */
 const PREVIOUS: Record<Mode, Mode> = { view: "view", choose: "view", locate: "choose", form: "locate", draw: "locate" };
@@ -45,9 +46,9 @@ function rememberId(key: string, id: string) {
 
 const readSupported = () => readIds(SUPPORTED_KEY);
 
-type Props = { initialReports: Report[]; isStaff: boolean; photosEnabled: boolean };
+type Props = { initialReports: Report[]; isStaff: boolean; isAdmin: boolean; photosEnabled: boolean };
 
-export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
+export function PublicApp({ initialReports, isStaff, isAdmin, photosEnabled }: Props) {
   const router = useRouter();
   const mapApi = useRef<MapApi | null>(null);
   const [active, setActive] = useState<Set<Category>>(() => new Set(CATEGORY_KEYS));
@@ -62,6 +63,27 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
   const locating = locationStatus === "searching";
   const [notice, setNotice] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // Solo el admin puede ver cada marcador por separado en lugar de los círculos con número.
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (isAdmin && localStorage.getItem(EXPAND_KEY) === "1") setExpanded(true);
+    } catch {
+      // Sin almacenamiento local: empieza agrupado.
+    }
+  }, [isAdmin]);
+
+  function toggleExpanded() {
+    setExpanded((prev) => {
+      try {
+        localStorage.setItem(EXPAND_KEY, prev ? "0" : "1");
+      } catch {
+        // Sin almacenamiento local: solo no lo recordamos.
+      }
+      return !prev;
+    });
+  }
 
   const modeRef = useRef(mode);
   const sentRef = useRef(sent);
@@ -300,6 +322,7 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
         hasFixedVoted={(id) => readIds(FIXED_VOTED_KEY).has(id)}
         padding={MAP_PADDING}
         userLocation={userLocation}
+        cluster={!(isAdmin && expanded)}
       />
 
       <div className="overlay-top">
@@ -369,7 +392,7 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
       {mode === "view" && (
         <button
           type="button"
-          className="locate-me"
+          className="map-btn locate-me"
           aria-label="Mostrar mi ubicación"
           aria-pressed={locationStatus === "on"}
           onClick={showMyLocation}
@@ -379,6 +402,24 @@ export function PublicApp({ initialReports, isStaff, photosEnabled }: Props) {
             <path
               fill="currentColor"
               d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"
+            />
+          </svg>
+        </button>
+      )}
+
+      {mode === "view" && isAdmin && (
+        <button
+          type="button"
+          className="map-btn expand-pins"
+          aria-label={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
+          title={expanded ? "Agrupar marcadores" : "Ver todos los marcadores"}
+          aria-pressed={expanded}
+          onClick={toggleExpanded}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M7 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5A1.5 1.5 0 1 1 7 4.5a1.5 1.5 0 0 1 0 3zM17 2a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM12 10a4 4 0 0 0-4 4c0 3 4 7 4 7s4-4 4-7a4 4 0 0 0-4-4zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"
             />
           </svg>
         </button>

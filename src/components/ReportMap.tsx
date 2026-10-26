@@ -55,9 +55,12 @@ type Props = {
   padding?: { top: number; bottom: number; left: number; right: number };
   /** Punto azul con la ubicación del vecino, como en Google Maps. */
   userLocation?: UserLocation | null;
+  /** Agrupar reportes cercanos en círculos con número (por omisión, sí). */
+  cluster?: boolean;
 };
 
 const BRAND = "#0f766e";
+const CLUSTER_OPTIONS = { clusterRadius: 48, clusterMaxZoom: 16 };
 
 // MapLibre trabaja en [lng, lat]; la configuración está en [lat, lng].
 const toLngLat = ([lat, lng]: LatLng): [number, number] => [lng, lat];
@@ -266,6 +269,7 @@ export function ReportMap({
   hasFixedVoted,
   padding,
   userLocation,
+  cluster = true,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -276,6 +280,7 @@ export function ReportMap({
   // Refs para que los manejadores de eventos vean siempre los valores actuales.
   const onPickRef = useRef(onPick);
   const reportsRef = useRef(reports);
+  const clusterRef = useRef(cluster);
   const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted });
   useEffect(() => {
     onPickRef.current = onPick;
@@ -378,9 +383,8 @@ export function ReportMap({
       map.addSource("reports", {
         type: "geojson",
         data: toFeatures(reportsRef.current),
-        cluster: true,
-        clusterRadius: 48,
-        clusterMaxZoom: 16,
+        cluster: clusterRef.current,
+        ...CLUSTER_OPTIONS,
       });
       map.addLayer({
         id: "clusters",
@@ -539,6 +543,13 @@ export function ReportMap({
     // El mapa se crea una vez; los cambios de props se aplican en los efectos de abajo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Agrupar o mostrar cada marcador por separado.
+  useEffect(() => {
+    clusterRef.current = cluster;
+    if (!ready) return;
+    mapRef.current?.getSource<GeoJSONSource>("reports")?.setClusterOptions({ cluster, ...CLUSTER_OPTIONS });
+  }, [ready, cluster]);
 
   // Actualizar los reportes visibles.
   useEffect(() => {
