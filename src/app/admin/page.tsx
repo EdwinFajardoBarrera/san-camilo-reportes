@@ -181,6 +181,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <div className="admin__body">
         <AdminMap reports={reports} />
         <section className="admin__list">
+          {reports.length > 0 && (
+            <div className="pdf-bar">
+              <a href={`/admin/pdf?estado=${status}`} className="btn btn--ghost btn--small" download>
+                Descargar PDF ({reports.length})
+              </a>
+            </div>
+          )}
           {status === "pendiente" && reports.length > 0 && (
             <form action={approveAllPending} className="bulk-bar bulk-bar--ok">
               {reports.map((r) => (
