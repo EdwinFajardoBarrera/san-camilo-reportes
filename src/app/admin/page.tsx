@@ -5,7 +5,7 @@ import { groupNearby, nearbyPublished } from "@/lib/duplicates";
 import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
-import { changeStatus, removeAllRejected, removeReport } from "./actions";
+import { approveAllPending, changeStatus, removeAllRejected, removeReport } from "./actions";
 import { ConfirmButton } from "./ConfirmButton";
 import { AdminMap } from "./AdminMap";
 import { AdminHeader } from "./AdminHeader";
@@ -181,6 +181,26 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <div className="admin__body">
         <AdminMap reports={reports} />
         <section className="admin__list">
+          {status === "pendiente" && reports.length > 0 && (
+            <form action={approveAllPending} className="bulk-bar bulk-bar--ok">
+              {reports.map((r) => (
+                <input key={r.id} type="hidden" name="id" value={r.id} />
+              ))}
+              <span>
+                {reports.length} {reports.length === 1 ? "reporte pendiente" : "reportes pendientes"}
+              </span>
+              <ConfirmButton
+                className="btn btn--primary"
+                pendingLabel="Aprobando…"
+                message={
+                  `¿Aprobar ${reports.length === 1 ? "el reporte pendiente" : `los ${reports.length} reportes pendientes`}? Se publicarán en el mapa.` +
+                  (groups.some((g) => g.length > 1) ? " Ojo: hay reportes repetidos que también se publicarán." : "")
+                }
+              >
+                Aprobar todos
+              </ConfirmButton>
+            </form>
+          )}
           {canDelete && status === "rechazado" && reports.length > 0 && (
             <form action={removeAllRejected} className="bulk-bar">
               <span>

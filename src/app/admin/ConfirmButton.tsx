@@ -2,8 +2,18 @@
 
 import { useFormStatus } from "react-dom";
 
-/** Botón de envío que pide confirmación antes de una acción que no se puede deshacer. */
-export function ConfirmButton({ message, children, className }: { message: string; children: React.ReactNode; className?: string }) {
+/** Botón de envío que pide confirmación antes de una acción importante. */
+export function ConfirmButton({
+  message,
+  children,
+  className,
+  pendingLabel = "Eliminando…",
+}: {
+  message: string;
+  children: React.ReactNode;
+  className?: string;
+  pendingLabel?: string;
+}) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -14,7 +24,7 @@ export function ConfirmButton({ message, children, className }: { message: strin
         if (!window.confirm(message)) e.preventDefault();
       }}
     >
-      {pending ? "Eliminando…" : children}
+      {pending ? pendingLabel : children}
     </button>
   );
 }
