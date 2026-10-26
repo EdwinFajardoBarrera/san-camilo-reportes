@@ -179,7 +179,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </nav>
 
       <div className="admin__body">
-        <AdminMap reports={reports} />
+        <AdminMap reports={reports} isAdmin={canDelete} />
         <section className="admin__list">
           {reports.length > 0 && (
             <div className="pdf-bar">

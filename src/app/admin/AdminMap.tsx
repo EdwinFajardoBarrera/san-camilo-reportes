@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ExpandPinsButton, useExpandedPins } from "@/components/ExpandPins";
 import { ReportMap } from "@/components/MapLoader";
 import type { MapApi } from "@/components/ReportMap";
 import type { Report } from "@/lib/types";
@@ -10,10 +11,11 @@ const INTERACTIVE = "button, a, input, select, textarea, label, summary, form";
 
 /**
  * Mapa del panel. Al tocar una tarjeta de reporte (`data-report-id`), el mapa
- * va a ese reporte y abre su globo.
+ * va a ese reporte y abre su globo. El admin puede ver cada marcador sin agrupar.
  */
-export function AdminMap({ reports }: { reports: Report[] }) {
+export function AdminMap({ reports, isAdmin = false }: { reports: Report[]; isAdmin?: boolean }) {
   const api = useRef<MapApi | null>(null);
+  const { expanded, toggle } = useExpandedPins(isAdmin);
   const section = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -51,7 +53,13 @@ export function AdminMap({ reports }: { reports: Report[] }) {
 
   return (
     <section ref={section} className="admin__map">
-      <ReportMap reports={reports} showStatus apiRef={api} />
+      <ReportMap
+        reports={reports}
+        showStatus
+        apiRef={api}
+        cluster={!expanded}
+        controls={isAdmin && <ExpandPinsButton expanded={expanded} onToggle={toggle} />}
+      />
     </section>
   );
 }
