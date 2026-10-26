@@ -52,6 +52,10 @@ type Props = {
   /** Avisar que ya se arregló; devuelve el nuevo total. */
   onFixedVote?: (id: string) => Promise<number>;
   hasFixedVoted?: (id: string) => boolean;
+  /** Al tocar un pin o una calle en el mapa (no al enfocarlo con `focusReport`). */
+  onSelect?: (id: string) => void;
+  /** Si existe, el globo muestra un botón «Ver en la lista» (panel en el celular). */
+  onShowInList?: (id: string) => void;
   /** Espacio que tapan los paneles flotantes, para encuadrar la colonia. */
   padding?: { top: number; bottom: number; left: number; right: number };
   /** Punto azul con la ubicación del vecino, como en Google Maps. */
@@ -270,6 +274,8 @@ export function ReportMap({
   hasSupported,
   onFixedVote,
   hasFixedVoted,
+  onSelect,
+  onShowInList,
   padding,
   userLocation,
   cluster = true,
@@ -284,13 +290,15 @@ export function ReportMap({
 
   // Refs para que los manejadores de eventos vean siempre los valores actuales.
   const onPickRef = useRef(onPick);
+  const onSelectRef = useRef(onSelect);
   const reportsRef = useRef(reports);
   const clusterRef = useRef(cluster);
-  const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted });
+  const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList });
   useEffect(() => {
     onPickRef.current = onPick;
+    onSelectRef.current = onSelect;
     reportsRef.current = reports;
-    popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted };
+    popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList };
   });
 
   // Crear el mapa una sola vez.
@@ -457,7 +465,8 @@ export function ReportMap({
         map.setFilter("street-selected", ["==", ["get", "id"], report.id]);
         popup.on("close", () => map.setFilter("street-selected", ["==", ["get", "id"], ""]));
       }
-      const { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted } = popupOptions.current;
+      const { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList } =
+        popupOptions.current;
       const markFixed =
         onMarkFixed &&
         (async (reportId: string) => {
@@ -474,6 +483,7 @@ export function ReportMap({
             supported: hasSupported?.(report.id) ?? false,
             onFixedVote,
             fixedVoted: hasFixedVoted?.(report.id) ?? false,
+            onShowInList,
           }),
         )
         .addTo(map);
@@ -484,6 +494,7 @@ export function ReportMap({
       const feature = e.features?.[0];
       if (feature?.geometry.type === "Point") {
         openPopup(feature.properties.id, feature.geometry.coordinates as [number, number], [0, -46]);
+        onSelectRef.current?.(feature.properties.id);
       }
     });
     map.on("click", "street-lines", (e) => {
@@ -491,7 +502,9 @@ export function ReportMap({
       // Si el clic también cae en un pin, ese ya abrió su globo.
       if (map.queryRenderedFeatures(e.point, { layers: ["pins", "clusters"] }).length) return;
       const id = e.features?.[0]?.properties.id;
-      if (id) openPopup(id, [e.lngLat.lng, e.lngLat.lat], [0, -8]);
+      if (!id) return;
+      openPopup(id, [e.lngLat.lng, e.lngLat.lat], [0, -8]);
+      onSelectRef.current?.(id);
     });
 
     /** Centra un reporte (su pin o toda su calle) y abre su globo. */
