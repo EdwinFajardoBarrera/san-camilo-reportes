@@ -14,6 +14,8 @@ type Options = {
   onFixedVote?: (id: string) => Promise<number>;
   /** Si este navegador ya avisó que se arregló. */
   fixedVoted?: boolean;
+  /** Si existe, se muestra el botón para ir a la tarjeta del reporte en la lista (panel). */
+  onShowInList?: (id: string) => void;
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
@@ -43,7 +45,7 @@ function ageClass(days: number) {
  */
 export function popupContent(
   report: Report,
-  { showStatus, onMarkFixed, onSupport, supported, onFixedVote, fixedVoted }: Options,
+  { showStatus, onMarkFixed, onSupport, supported, onFixedVote, fixedVoted, onShowInList }: Options,
 ): HTMLElement {
   const cat = CATEGORIES[report.category];
   const fixed = report.status === "resuelto" && report.resolvedAt;
@@ -165,6 +167,12 @@ export function popupContent(
         button.textContent = "No se pudo guardar. Reintentar";
       }
     });
+    root.append(button);
+  }
+  if (onShowInList) {
+    const button = el("button", "btn btn--ghost btn--small popup__to-list", "Ver en la lista ↓");
+    button.type = "button";
+    button.addEventListener("click", () => onShowInList(report.id));
     root.append(button);
   }
   return root;

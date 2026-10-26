@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CATEGORIES, STATUSES, STATUS_LABELS, categoryConfig, type Status } from "@/lib/config";
+import { CATEGORIES, CATEGORY_KEYS, STATUSES, STATUS_LABELS, categoryConfig, type Status } from "@/lib/config";
 import { groupNearby, nearbyPublished } from "@/lib/duplicates";
 import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
+import { SORTS, adminViewQuery, applyAdminView, parseAdminView, type Sort } from "@/lib/adminView";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
 import { approveAllPending, changeStatus, removeAllRejected, removeReport } from "./actions";
 import { ConfirmButton } from "./ConfirmButton";
@@ -149,14 +150,15 @@ function ReportCard({ report, nearby = [], canDelete }: { report: Report; nearby
   );
 }
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ estado?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ estado?: string; tipo?: string; orden?: string }> }) {
   const access = await gate();
   if ("screen" in access) return access.screen;
   const canDelete = access.user.role === "admin";
 
-  const { estado } = await searchParams;
+  const { estado, tipo, orden } = await searchParams;
   const status: Status = STATUSES.includes(estado as Status) ? (estado as Status) : "pendiente";
-  const [reports, counts, published] = await Promise.all([
+  const view = parseAdminView({ tipo, orden });
+  const [all, counts, published] = await Promise.all([
     listReportsByStatus(status),
     countByStatus(),
     // Para avisar si un pendiente repite algo ya publicado.
@@ -164,7 +166,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ? Promise.all([listReportsByStatus("aprobado"), listReportsByStatus("resuelto")]).then((r) => r.flat())
       : Promise.resolve([] as Report[]),
   ]);
+  const reports = applyAdminView(all, view);
   const groups = groupNearby(reports);
+  const typeCounts = Object.fromEntries(CATEGORY_KEYS.map((k) => [k, all.filter((r) => r.category === k).length]));
 
   return (
     <main className="admin">
@@ -172,7 +176,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       <nav className="tabs" aria-label="Estado">
         {STATUSES.map((s) => (
-          <Link key={s} href={`/admin?estado=${s}`} className="tab" aria-current={s === status ? "page" : undefined}>
+          <Link key={s} href={`/admin?${adminViewQuery(s, view)}`} className="tab" aria-current={s === status ? "page" : undefined}>
             {STATUS_LABELS[s]} <span className="chip__count">{counts[s]}</span>
           </Link>
         ))}
@@ -181,9 +185,48 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <div className="admin__body">
         <AdminMap reports={reports} isAdmin={canDelete} />
         <section className="admin__list">
+          {all.length > 0 && (
+            <div className="list-tools">
+              <nav className="filters" aria-label="Filtrar por tipo">
+                <Link
+                  href={`/admin?${adminViewQuery(status, { ...view, category: null })}`}
+                  className="chip"
+                  aria-pressed={view.category === null}
+                >
+                  Todos <span className="chip__count">{all.length}</span>
+                </Link>
+                {CATEGORY_KEYS.map((key) => (
+                  <Link
+                    key={key}
+                    href={`/admin?${adminViewQuery(status, { ...view, category: key })}`}
+                    className="chip"
+                    aria-pressed={view.category === key}
+                    style={{ "--chip-color": CATEGORIES[key].color } as React.CSSProperties}
+                  >
+                    <span aria-hidden>{CATEGORIES[key].icon}</span>
+                    {CATEGORIES[key].label}
+                    <span className="chip__count">{typeCounts[key]}</span>
+                  </Link>
+                ))}
+              </nav>
+              <nav className="sort" aria-label="Ordenar">
+                Ordenar por:
+                {(Object.keys(SORTS) as Sort[]).map((sort) => (
+                  <Link
+                    key={sort}
+                    href={`/admin?${adminViewQuery(status, { ...view, sort })}`}
+                    className="sort__option"
+                    aria-current={view.sort === sort ? "true" : undefined}
+                  >
+                    {SORTS[sort]}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          )}
           {reports.length > 0 && (
             <div className="pdf-bar">
-              <a href={`/admin/pdf?estado=${status}`} className="btn btn--ghost btn--small" download>
+              <a href={`/admin/pdf?${adminViewQuery(status, view)}`} className="btn btn--ghost btn--small" download>
                 Descargar PDF ({reports.length})
               </a>
             </div>
@@ -222,7 +265,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </form>
           )}
           {reports.length === 0 ? (
-            <p className="empty">No hay reportes en «{STATUS_LABELS[status]}».</p>
+            <p className="empty">
+              {view.category && all.length > 0
+                ? `No hay reportes de «${CATEGORIES[view.category].label}» en «${STATUS_LABELS[status]}».`
+                : `No hay reportes en «${STATUS_LABELS[status]}».`}
+            </p>
           ) : (
             <ul>
               {groups.map((group) =>
