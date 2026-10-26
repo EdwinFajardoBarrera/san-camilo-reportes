@@ -7,7 +7,8 @@ import maplibregl, {
   type MapGeoJSONFeature,
   type Map as MapLibreMap,
 } from "maplibre-gl";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { CATEGORY_KEYS, MAP_STYLE_URL, NEIGHBORHOOD, type LatLng } from "@/lib/config";
 import { clipLinesToPolygon, distanceToLine, nearestPointOnLines, paddedBounds, type Line } from "@/lib/geo";
 import { pinImageId, pinSvg } from "@/lib/pins";
@@ -57,6 +58,8 @@ type Props = {
   userLocation?: UserLocation | null;
   /** Agrupar reportes cercanos en círculos con número (por omisión, sí). */
   cluster?: boolean;
+  /** Botones extra que se apilan encima del zoom, sin encimarse con él. */
+  controls?: ReactNode;
 };
 
 const BRAND = "#0f766e";
@@ -270,12 +273,14 @@ export function ReportMap({
   padding,
   userLocation,
   cluster = true,
+  controls,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const draftMarker = useRef<maplibregl.Marker | null>(null);
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const [ready, setReady] = useState(false);
+  const [controlsEl, setControlsEl] = useState<HTMLElement | null>(null);
 
   // Refs para que los manejadores de eventos vean siempre los valores actuales.
   const onPickRef = useRef(onPick);
@@ -307,6 +312,12 @@ export function ReportMap({
     });
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    // Contenedor para los botones de la página: MapLibre lo apila encima del zoom
+    // (y del crédito del mapa), así nunca se tapan aunque cambie su altura.
+    const extra = document.createElement("div");
+    extra.className = "maplibregl-ctrl map-controls";
+    map.addControl({ onAdd: () => extra, onRemove: () => extra.remove() }, "bottom-right");
+    setControlsEl(extra);
     mapRef.current = map;
 
     map.on("load", async () => {
@@ -629,6 +640,7 @@ export function ReportMap({
   return (
     <div className="map-frame">
       <div ref={container} className={`map${onPick ? " map--picking" : ""}`} />
+      {controlsEl && controls && createPortal(controls, controlsEl)}
     </div>
   );
 }

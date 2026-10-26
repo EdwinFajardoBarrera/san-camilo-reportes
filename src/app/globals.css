@@ -55,16 +55,14 @@ button, input, textarea { font: inherit; }
 }
 .user-dot--heading .user-dot__cone { display: block; }
 @keyframes user-pulse { from { transform: scale(1); opacity: 0.5; } to { transform: scale(2.2); opacity: 0; } }
+/* Botones redondos apilados encima del zoom, dentro de los controles del mapa. */
+.map-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .map-btn {
-  position: absolute; z-index: 10; right: 10px;
   display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%;
   background: var(--surface); color: #5f6368; box-shadow: var(--shadow); cursor: pointer;
 }
 .map-btn svg { width: 22px; height: 22px; }
-.locate-me { bottom: calc(84px + 98px + env(safe-area-inset-bottom)); }
 .locate-me[aria-pressed="true"] { color: #1a73e8; }
-/* Solo admin: encima del botón de ubicación. */
-.expand-pins { bottom: calc(84px + 98px + 54px + env(safe-area-inset-bottom)); }
 .expand-pins[aria-pressed="true"] { background: var(--brand); color: #fff; }
 
 @keyframes drop { from { transform: translateY(-14px); opacity: 0; } }
