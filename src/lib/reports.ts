@@ -145,6 +145,22 @@ export async function setReportStatus(
   return rows[0]?.removed_photo ?? null;
 }
 
+/**
+ * Aprueba de una vez los reportes indicados que sigan pendientes. Solo toca los
+ * que el moderador tenía a la vista, no los que hayan llegado después.
+ * Devuelve cuántos se aprobaron.
+ */
+export async function approvePendingReports(ids: string[], reviewedBy: string): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await query<{ id: string }>(
+    `UPDATE reports SET status = 'aprobado', reviewed_at = COALESCE(reviewed_at, now()), reviewed_by = $2
+     WHERE id = ANY($1::uuid[]) AND status = 'pendiente'
+     RETURNING id`,
+    [ids, reviewedBy],
+  );
+  return rows.length;
+}
+
 /** Borra el reporte y devuelve la URL de su foto, si tenía. */
 export async function deleteReport(id: string): Promise<string | null> {
   const rows = await query<{ photo_url: string | null }>("DELETE FROM reports WHERE id = $1 RETURNING photo_url", [id]);

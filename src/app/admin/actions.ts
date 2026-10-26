@@ -16,7 +16,7 @@ import {
   setupPasswordMatches,
   startSession,
 } from "@/lib/auth";
-import { deleteRejectedReports, deleteReport, setReportStatus } from "@/lib/reports";
+import { approvePendingReports, deleteRejectedReports, deleteReport, setReportStatus } from "@/lib/reports";
 import { getClientIp } from "@/lib/request";
 import { deletePhoto } from "@/lib/storage";
 import { adminExists, createAdmin, setPassword } from "@/lib/users";
@@ -134,6 +134,18 @@ export async function changeStatus(formData: FormData): Promise<void> {
 export async function markFixed(id: string): Promise<void> {
   const user = await requireStaff();
   await setReportStatus(z.string().uuid().parse(id), "resuelto", user.username);
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+/**
+ * Aprueba todos los pendientes que se veían en el panel. Lo pueden hacer el
+ * administrador y los colaboradores, igual que aprobar uno por uno.
+ */
+export async function approveAllPending(formData: FormData): Promise<void> {
+  const user = await requireStaff();
+  const ids = z.array(z.string().uuid()).max(500).parse(formData.getAll("id"));
+  await approvePendingReports(ids, user.username);
   revalidatePath("/");
   revalidatePath("/admin");
 }
