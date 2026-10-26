@@ -360,6 +360,7 @@ button, input, textarea { font: inherit; }
 .report--selected { border-color: var(--chip-color) !important; box-shadow: 0 0 0 2px var(--chip-color); }
 .report { scroll-margin: 16px; }
 .admin__map .maplibregl-ctrl-bottom-right { margin-bottom: 0; }
+.map-toast { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 2; }
 .admin__list { padding: 16px; min-width: 0; }
 .admin__list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .report { border-left: 4px solid var(--chip-color); display: flex; flex-direction: column; gap: 6px; }
