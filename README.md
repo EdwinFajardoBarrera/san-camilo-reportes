@@ -27,6 +27,7 @@ Todo es software libre. No se guardan datos personales: la IP solo se guarda com
 3. El administrador o un colaborador entra a `/admin`, lo revisa y lo **aprueba** o **rechaza**.
 4. Los aprobados aparecen en el mapa público, con la fecha del reporte y los días que lleva sin arreglarse. Al alejar el zoom se agrupan con números.
 5. Cuando se arregla, el admin lo marca como **Arreglado** (desde el panel, con fecha, o desde el globo del mapa). Se guarda la fecha y se muestra cuántos días tardó; se ven con el filtro "Arreglados".
+6. Desde el panel, el admin o un colaborador puede subir una **foto de evidencia** a cualquier reporte (por ejemplo, para confirmar la inundación o mostrar que ya se arregló). Se comprime en el teléfono igual que las demás fotos, se ve en el mapa público como «Evidencia del equipo» y se borra si se cambia, se quita, o el reporte se rechaza o elimina.
 
 ### Apoyos y duplicados
 

@@ -32,6 +32,20 @@ function row(label: string, value: string, className = "") {
   return r;
 }
 
+/** Foto que abre en grande en otra pestaña. */
+function photoLink(url: string, alt: string) {
+  const link = el("a", "popup__photo");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  const img = el("img");
+  img.src = url;
+  img.alt = alt;
+  img.loading = "lazy";
+  link.append(img);
+  return link;
+}
+
 /** Edad del reporte abierto: verde < 15 días, ámbar < 60, rojo después. */
 function ageClass(days: number) {
   if (days < 15) return "age--fresh";
@@ -57,17 +71,10 @@ export function popupContent(
   if (showStatus || fixed) head.append(el("span", `badge badge--${report.status}`, STATUS_LABELS[report.status]));
   root.append(head);
 
-  if (report.photoUrl) {
-    const link = el("a", "popup__photo");
-    link.href = report.photoUrl;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    const img = el("img");
-    img.src = report.photoUrl;
-    img.alt = `Foto del reporte: ${cat.label}`;
-    img.loading = "lazy";
-    link.append(img);
-    root.append(link);
+  if (report.photoUrl) root.append(photoLink(report.photoUrl, `Foto del reporte: ${cat.label}`));
+  if (report.evidenceUrl) {
+    root.append(el("p", "popup__evidence", "📷 Evidencia del equipo"));
+    root.append(photoLink(report.evidenceUrl, `Foto de evidencia: ${cat.label}`));
   }
 
   if (report.reference) root.append(el("p", "popup__ref", report.reference));

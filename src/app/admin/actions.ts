@@ -124,8 +124,8 @@ export async function changeStatus(formData: FormData): Promise<void> {
     status: formData.get("status"),
     resolvedOn: formData.get("resolvedOn") ?? undefined,
   });
-  const removedPhoto = await setReportStatus(id, status, user.username, status === "resuelto" ? resolvedDate(resolvedOn) : undefined);
-  await deletePhoto(removedPhoto);
+  const removed = await setReportStatus(id, status, user.username, status === "resuelto" ? resolvedDate(resolvedOn) : undefined);
+  await Promise.all(removed.map(deletePhoto));
   revalidatePath("/");
   revalidatePath("/admin");
 }
@@ -162,7 +162,7 @@ export async function removeAllRejected(): Promise<void> {
 export async function removeReport(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = z.string().uuid().parse(formData.get("id"));
-  await deletePhoto(await deleteReport(id));
+  await Promise.all((await deleteReport(id)).map(deletePhoto));
   revalidatePath("/");
   revalidatePath("/admin");
 }

@@ -15,6 +15,7 @@ const report = (i: number, extra: Partial<Report> = {}): Report => ({
   resolvedAt: null,
   path: null,
   photoUrl: null,
+  evidenceUrl: null,
   reporterName: null,
   supportCount: 0,
   fixedVotes: 2,

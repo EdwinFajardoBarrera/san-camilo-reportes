@@ -19,6 +19,8 @@ type Row = {
   resolved_at: Date | null;
   path: Line[] | null;
   photo_url: string | null;
+  evidence_url: string | null;
+  evidence_by: string | null;
   reporter_name: string | null;
   support_count: number;
   fixed_votes: number;
@@ -37,13 +39,15 @@ const toReport = (r: Row): Report => ({
   resolvedAt: r.resolved_at?.toISOString() ?? null,
   path: r.path,
   photoUrl: r.photo_url,
+  evidenceUrl: r.evidence_url,
+  evidenceBy: r.evidence_by,
   reporterName: r.reporter_name,
   supportCount: r.support_count,
   fixedVotes: r.fixed_votes,
   reviewedBy: r.reviewed_by,
 });
 
-const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, reporter_name, reviewed_by,
+const COLUMNS = `id, category, status, description, reference, lat, lng, created_at, resolved_at, path, photo_url, evidence_url, evidence_by, reporter_name, reviewed_by,
   (SELECT count(*)::int FROM supports s WHERE s.report_id = reports.id) AS support_count,
   (SELECT count(*)::int FROM fixed_votes f WHERE f.report_id = reports.id) AS fixed_votes`;
 
@@ -53,7 +57,7 @@ export async function listPublicReports(): Promise<Report[]> {
     [PUBLIC_STATUSES],
   );
   // El público no ve quién del equipo revisó cada reporte.
-  return rows.map((row) => ({ ...toReport(row), reviewedBy: undefined }));
+  return rows.map((row) => ({ ...toReport(row), reviewedBy: undefined, evidenceBy: undefined }));
 }
 
 export async function listReportsByStatus(status: Status): Promise<Report[]> {
@@ -117,32 +121,54 @@ export async function createReport(
 /**
  * Cambia el estado de un reporte. Al marcarlo como arreglado se guarda la fecha
  * indicada (o la actual); nunca antes de la fecha del reporte. Al rechazarlo se
- * quita la foto. Al reabrirlo se borran los avisos de arreglado, que ya no aplican.
- * Se guarda quién hizo el cambio. Devuelve la URL de la foto que haya que borrar del almacenamiento.
+ * quitan la foto y la evidencia. Al reabrirlo se borran los avisos de arreglado, que ya no aplican.
+ * Se guarda quién hizo el cambio. Devuelve las URLs de las fotos que haya que borrar del almacenamiento.
  */
 export async function setReportStatus(
   id: string,
   status: Status,
   reviewedBy: string,
   resolvedAt?: Date,
-): Promise<string | null> {
+): Promise<string[]> {
   const reviewed = status === "aprobado" || status === "rechazado";
   const resolved = status === "resuelto";
   const rejected = status === "rechazado";
-  const rows = await query<{ removed_photo: string | null }>(
-    `WITH old AS (SELECT photo_url FROM reports WHERE id = $1)
+  const rows = await query<{ removed_photo: string | null; removed_evidence: string | null }>(
+    `WITH old AS (SELECT photo_url, evidence_url FROM reports WHERE id = $1)
      UPDATE reports SET
        status = $2,
        reviewed_at = CASE WHEN $3 THEN COALESCE(reviewed_at, now()) ELSE reviewed_at END,
        resolved_at = CASE WHEN $4 THEN GREATEST(created_at, COALESCE($5::timestamptz, now())) ELSE NULL END,
        photo_url = CASE WHEN $6 THEN NULL ELSE photo_url END,
+       evidence_url = CASE WHEN $6 THEN NULL ELSE evidence_url END,
+       evidence_by = CASE WHEN $6 THEN NULL ELSE evidence_by END,
        reviewed_by = $7
      WHERE id = $1
-     RETURNING CASE WHEN $6 THEN (SELECT photo_url FROM old) END AS removed_photo`,
+     RETURNING CASE WHEN $6 THEN (SELECT photo_url FROM old) END AS removed_photo,
+               CASE WHEN $6 THEN (SELECT evidence_url FROM old) END AS removed_evidence`,
     [id, status, reviewed, resolved, resolvedAt ?? null, rejected, reviewedBy],
   );
   if (status === "aprobado") await query("DELETE FROM fixed_votes WHERE report_id = $1", [id]);
-  return rows[0]?.removed_photo ?? null;
+  return rows.flatMap((r) => [r.removed_photo, r.removed_evidence]).filter((url): url is string => Boolean(url));
+}
+
+/**
+ * Guarda (o quita, con null) la foto de evidencia del equipo. Devuelve la URL
+ * anterior para borrarla del almacenamiento, o undefined si el reporte no existe.
+ */
+export async function setReportEvidence(
+  id: string,
+  evidenceUrl: string | null,
+  uploadedBy: string,
+): Promise<{ previous: string | null } | undefined> {
+  const rows = await query<{ previous: string | null }>(
+    `WITH old AS (SELECT evidence_url FROM reports WHERE id = $1)
+     UPDATE reports SET evidence_url = $2, evidence_by = CASE WHEN $2::text IS NULL THEN NULL ELSE $3 END
+     WHERE id = $1
+     RETURNING (SELECT evidence_url FROM old) AS previous`,
+    [id, evidenceUrl, uploadedBy],
+  );
+  return rows[0];
 }
 
 /**
@@ -161,18 +187,19 @@ export async function approvePendingReports(ids: string[], reviewedBy: string): 
   return rows.length;
 }
 
-/** Borra el reporte y devuelve la URL de su foto, si tenía. */
-export async function deleteReport(id: string): Promise<string | null> {
-  const rows = await query<{ photo_url: string | null }>("DELETE FROM reports WHERE id = $1 RETURNING photo_url", [id]);
-  return rows[0]?.photo_url ?? null;
+type PhotoRow = { photo_url: string | null; evidence_url: string | null };
+const photoUrls = (rows: PhotoRow[]) => rows.flatMap((r) => [r.photo_url, r.evidence_url]).filter((url): url is string => Boolean(url));
+
+/** Borra el reporte y devuelve las URLs de su foto y su evidencia, si tenía. */
+export async function deleteReport(id: string): Promise<string[]> {
+  const rows = await query<PhotoRow>("DELETE FROM reports WHERE id = $1 RETURNING photo_url, evidence_url", [id]);
+  return photoUrls(rows);
 }
 
 /** Borra todos los reportes rechazados y devuelve las URLs de sus fotos. */
 export async function deleteRejectedReports(): Promise<{ count: number; photos: string[] }> {
-  const rows = await query<{ photo_url: string | null }>(
-    "DELETE FROM reports WHERE status = 'rechazado' RETURNING photo_url",
-  );
-  return { count: rows.length, photos: rows.flatMap((r) => (r.photo_url ? [r.photo_url] : [])) };
+  const rows = await query<PhotoRow>("DELETE FROM reports WHERE status = 'rechazado' RETURNING photo_url, evidence_url");
+  return { count: rows.length, photos: photoUrls(rows) };
 }
 
 /**

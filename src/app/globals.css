@@ -368,6 +368,12 @@ button, input, textarea { font: inherit; }
 .report__head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .report__dates { color: var(--muted); font-size: 0.82rem; }
 .report__photo img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; }
+.evidence { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--bg); }
+.evidence__title { margin: 0; font-size: 0.85rem; font-weight: 600; }
+.evidence__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.evidence__actions label { cursor: pointer; }
+.evidence__actions .is-disabled { opacity: 0.6; cursor: progress; }
+.popup__evidence { margin: 0; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
 .report__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .fix-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px; border-radius: 12px; background: var(--bg); }
 .fix-form label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
