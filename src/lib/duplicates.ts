@@ -63,6 +63,7 @@ export function similarNearby(
     createdAt: "",
     resolvedAt: null,
     photoUrl: null,
+    evidenceUrl: null,
     reporterName: null,
     supportCount: 0,
     fixedVotes: 0,

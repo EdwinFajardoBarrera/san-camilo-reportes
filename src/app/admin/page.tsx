@@ -6,8 +6,10 @@ import { pathLength } from "@/lib/geo";
 import { agoLabel, daysBetween, daysLabel, formatDate, localDay, TIME_ZONE } from "@/lib/dates";
 import { SORTS, adminViewQuery, applyAdminView, parseAdminView, type Sort } from "@/lib/adminView";
 import { countByStatus, listReportsByStatus, type Report } from "@/lib/reports";
+import { photosEnabled } from "@/lib/storage";
 import { approveAllPending, changeStatus, removeAllRejected, removeReport } from "./actions";
 import { ConfirmButton } from "./ConfirmButton";
+import { EvidencePhoto } from "./EvidencePhoto";
 import { AdminMap } from "./AdminMap";
 import { AdminHeader } from "./AdminHeader";
 import { gate } from "./gate";
@@ -83,7 +85,17 @@ function NearbyWarning({ nearby }: { nearby: Nearby }) {
   );
 }
 
-function ReportCard({ report, nearby = [], canDelete }: { report: Report; nearby?: Nearby; canDelete: boolean }) {
+function ReportCard({
+  report,
+  nearby = [],
+  canDelete,
+  canUpload,
+}: {
+  report: Report;
+  nearby?: Nearby;
+  canDelete: boolean;
+  canUpload: boolean;
+}) {
   const cat = CATEGORIES[report.category];
   const osm = `https://www.openstreetmap.org/?mlat=${report.lat}&mlon=${report.lng}#map=19/${report.lat}/${report.lng}`;
   return (
@@ -126,6 +138,12 @@ function ReportCard({ report, nearby = [], canDelete }: { report: Report; nearby
       <a href={osm} target="_blank" rel="noreferrer" className="link-muted">
         Ver ubicación ({report.lat.toFixed(5)}, {report.lng.toFixed(5)})
       </a>
+      <EvidencePhoto
+        reportId={report.id}
+        url={report.evidenceUrl}
+        uploadedBy={report.evidenceBy}
+        enabled={canUpload && report.status !== "rechazado"}
+      />
       {report.status === "aprobado" && <FixForm report={report} />}
       <div className="report__actions">
         {NEXT_ACTIONS[report.status].map((a) => (
@@ -154,6 +172,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const access = await gate();
   if ("screen" in access) return access.screen;
   const canDelete = access.user.role === "admin";
+  const canUpload = photosEnabled();
 
   const { estado, tipo, orden } = await searchParams;
   const status: Status = STATUSES.includes(estado as Status) ? (estado as Status) : "pendiente";
@@ -285,6 +304,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     report={group[0]}
                     nearby={nearbyPublished(group[0], published)}
                     canDelete={canDelete}
+                    canUpload={canUpload}
                   />
                 ) : (
                   <li key={group[0].id} className="dup-group">
@@ -294,7 +314,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     </p>
                     <ul>
                       {group.map((r) => (
-                        <ReportCard key={r.id} report={r} nearby={nearbyPublished(r, published)} canDelete={canDelete} />
+                        <ReportCard
+                          key={r.id}
+                          report={r}
+                          nearby={nearbyPublished(r, published)}
+                          canDelete={canDelete}
+                          canUpload={canUpload}
+                        />
                       ))}
                     </ul>
                   </li>
