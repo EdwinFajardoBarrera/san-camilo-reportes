@@ -199,6 +199,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <main className="admin">
       <AdminHeader user={access.user} title="Panel de reportes" />
 
+      {!canUpload && (
+        <p className="config-warning" role="status">
+          📷 Las fotos están desactivadas porque falta conectar el almacenamiento.{" "}
+          {canDelete
+            ? "En Vercel: tu proyecto → Storage → conecta un Blob a Production (crea la variable BLOB_READ_WRITE_TOKEN) y haz Redeploy."
+            : "Avísale al administrador."}
+        </p>
+      )}
+
       <nav className="tabs" aria-label="Estado">
         {STATUSES.map((s) => (
           <Link key={s} href={`/admin?${adminViewQuery(s, view)}`} className="tab" aria-current={s === status ? "page" : undefined}>
