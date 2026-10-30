@@ -41,7 +41,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const kind = detectImageType(bytes);
   if (!kind) return error("La foto debe ser JPG o WebP", 415);
 
-  const url = await savePhoto(bytes, kind);
+  let url: string;
+  try {
+    url = await savePhoto(bytes, kind);
+  } catch (err) {
+    console.error("No se pudo guardar la evidencia", err);
+    return error("No se pudo guardar la foto en el almacenamiento. Revisa la configuración de Vercel Blob.", 502);
+  }
   const result = await setReportEvidence(id, url, user.username);
   if (!result) {
     await deletePhoto(url);
