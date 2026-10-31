@@ -29,7 +29,12 @@ button, input, textarea { font: inherit; }
 .maplibregl-ctrl-group { border-radius: 12px !important; box-shadow: var(--shadow) !important; }
 .maplibregl-ctrl-group button { width: 40px !important; height: 40px !important; }
 .maplibregl-ctrl-bottom-right { margin-bottom: 84px; }
-.maplibregl-popup-content { border-radius: 14px !important; padding: 14px !important; box-shadow: var(--shadow-lg) !important; }
+.maplibregl-popup-content {
+  border-radius: 14px !important; padding: 14px !important; box-shadow: var(--shadow-lg) !important;
+  display: flex; flex-direction: column;
+}
+/* El globo abierto va encima de los botones del mapa para que no le tapen los suyos. */
+.maplibregl-popup { z-index: 3; }
 
 .draft-pin {
   width: 30px; height: 40px;
@@ -132,8 +137,10 @@ button, input, textarea { font: inherit; }
 .fab span { font-size: 1.25rem; font-weight: 400; }
 
 /* ---------- Globo de información ---------- */
-.popup { --chip-color: var(--brand); display: flex; flex-direction: column; gap: 8px; min-width: 210px; font-size: 0.875rem; }
+.popup { --chip-color: var(--brand); display: flex; flex-direction: column; gap: 8px; min-width: 210px; min-height: 0; font-size: 0.875rem; }
 .popup p { margin: 0; }
+.popup__body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.popup__actions { display: flex; flex-direction: column; gap: 8px; }
 .popup__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .popup__icon {
   display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
@@ -404,7 +411,7 @@ button, label, summary, a { -webkit-tap-highlight-color: transparent; }
   .admin__map { height: auto; min-height: calc(100dvh - 110px); position: sticky; top: 0; }
   .admin__list { max-height: calc(100dvh - 110px); overflow-y: auto; }
   /* En escritorio la lista está siempre a la vista: no hace falta el botón. */
-  .popup__to-list { display: none; }
+  .popup__to-list, .popup__actions:has(> .popup__to-list:only-child) { display: none; }
   .overlay-top { padding: 16px 16px 0; }
   .filters { margin: 0; padding: 2px 0 6px; }
 }

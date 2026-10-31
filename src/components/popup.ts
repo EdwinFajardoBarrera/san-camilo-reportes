@@ -65,20 +65,23 @@ export function popupContent(
   const fixed = report.status === "resuelto" && report.resolvedAt;
   const root = el("div", "popup");
   root.style.setProperty("--chip-color", fixed ? "#16a34a" : cat.color);
+  // Si el globo no cabe en el mapa, solo esta parte se recorre: los botones del
+  // panel quedan siempre a la vista debajo.
+  const body = el("div", "popup__body");
 
   const head = el("div", "popup__head");
   head.append(el("span", "popup__icon", cat.icon), el("strong", "popup__title", cat.label));
   if (showStatus || fixed) head.append(el("span", `badge badge--${report.status}`, STATUS_LABELS[report.status]));
-  root.append(head);
+  body.append(head);
 
-  if (report.photoUrl) root.append(photoLink(report.photoUrl, `Foto del reporte: ${cat.label}`));
+  if (report.photoUrl) body.append(photoLink(report.photoUrl, `Foto del reporte: ${cat.label}`));
   if (report.evidenceUrl) {
-    root.append(el("p", "popup__evidence", "📷 Evidencia del equipo"));
-    root.append(photoLink(report.evidenceUrl, `Foto de evidencia: ${cat.label}`));
+    body.append(el("p", "popup__evidence", "📷 Evidencia del equipo"));
+    body.append(photoLink(report.evidenceUrl, `Foto de evidencia: ${cat.label}`));
   }
 
-  if (report.reference) root.append(el("p", "popup__ref", report.reference));
-  if (report.description) root.append(el("p", "popup__desc", report.description));
+  if (report.reference) body.append(el("p", "popup__ref", report.reference));
+  if (report.description) body.append(el("p", "popup__desc", report.description));
 
   const facts = el("div", "popup__facts");
   facts.append(row("Reportado", formatDate(report.createdAt)));
@@ -93,7 +96,7 @@ export function popupContent(
     const open = daysBetween(report.createdAt);
     facts.append(row("Sin arreglar", open === 0 ? "reportado hoy" : daysLabel(open), ageClass(open)));
   }
-  root.append(facts);
+  body.append(facts);
 
   const supportLabel = categoryConfig(report.category).supportLabel;
   if (supportLabel) {
@@ -125,7 +128,7 @@ export function popupContent(
       });
       box.append(button);
     }
-    root.append(box);
+    body.append(box);
   }
 
   if (report.status === "aprobado" && (onFixedVote || report.fixedVotes > 0)) {
@@ -158,9 +161,10 @@ export function popupContent(
       });
       box.append(button);
     }
-    root.append(box);
+    body.append(box);
   }
 
+  const actions = el("div", "popup__actions");
   if (onMarkFixed && report.status === "aprobado") {
     const button = el("button", "btn btn--primary btn--small", "Marcar como arreglado");
     button.type = "button";
@@ -174,13 +178,15 @@ export function popupContent(
         button.textContent = "No se pudo guardar. Reintentar";
       }
     });
-    root.append(button);
+    actions.append(button);
   }
   if (onShowInList) {
     const button = el("button", "btn btn--ghost btn--small popup__to-list", "Ver en la lista ↓");
     button.type = "button";
     button.addEventListener("click", () => onShowInList(report.id));
-    root.append(button);
+    actions.append(button);
   }
+  root.append(body);
+  if (actions.childElementCount) root.append(actions);
   return root;
 }

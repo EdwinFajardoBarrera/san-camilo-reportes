@@ -73,6 +73,10 @@ const FADED_OPACITY = 0.45;
 const NO_REPORTS: Report[] = [];
 
 const BRAND = "#0f766e";
+/** Alto de la punta del globo y espacio mínimo entre el globo y el borde del mapa. */
+const POPUP_TIP = 10;
+const POPUP_MARGIN = 10;
+const POPUP_MIN_HEIGHT = 120;
 const CLUSTER_OPTIONS = { clusterRadius: 48, clusterMaxZoom: 16 };
 
 // MapLibre trabaja en [lng, lat]; la configuración está en [lat, lng].
@@ -301,12 +305,14 @@ export function ReportMap({
   const reportsRef = useRef(reports);
   const fadedRef = useRef(faded);
   const clusterRef = useRef(cluster);
+  const paddingRef = useRef(padding);
   const popupOptions = useRef({ showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList });
   useEffect(() => {
     onPickRef.current = onPick;
     onSelectRef.current = onSelect;
     reportsRef.current = reports;
     fadedRef.current = faded;
+    paddingRef.current = padding;
     popupOptions.current = { showStatus, onMarkFixed, onSupport, hasSupported, onFixedVote, hasFixedVoted, onShowInList };
   });
 
@@ -492,10 +498,25 @@ export function ReportMap({
       map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: (zoom ?? map.getZoom()) + 0.5 });
     });
 
-    const openPopup = (id: string, at: [number, number], offset: [number, number]) => {
+    /**
+     * Abre el globo de un reporte. Va arriba del pin; si ahí no cabe ni moviendo el
+     * mapa (el pin está en el límite de la colonia), se vuelve a abrir debajo.
+     */
+    const openPopup = (id: string, at: [number, number], offset: [number, number], below = false) => {
       const report = reportsRef.current.find((r) => r.id === id) ?? fadedRef.current.find((r) => r.id === id);
       if (!report) return;
-      const popup = new maplibregl.Popup({ offset, maxWidth: "300px", closeButton: false });
+      // El lado se fija aquí: si MapLibre lo eligiera, lo cambiaría a media animación
+      // al acomodar el mapa y el globo podría quedar cortado.
+      const popup = new maplibregl.Popup({
+        offset: below ? [0, 0] : offset,
+        anchor: below ? "top" : "bottom",
+        maxWidth: "300px",
+        closeButton: false,
+      });
+      // En el mapa público la barra de arriba y el botón de abajo tapan el mapa.
+      const mapEl = map.getContainer();
+      const insetTop = Math.max(paddingRef.current?.top ?? 0, POPUP_MARGIN);
+      const insetBottom = Math.max(paddingRef.current?.bottom ?? 0, POPUP_MARGIN);
       // Resaltar el trazo de la calle mientras su globo está abierto.
       if (report.path) {
         map.setFilter("street-selected", ["==", ["get", "id"], report.id]);
@@ -523,6 +544,52 @@ export function ReportMap({
           }),
         )
         .addTo(map);
+      // Que el globo nunca se salga del mapa (en el teléfono el del panel es bajo):
+      // lo que no quepa se recorre con el dedo y los botones del panel quedan fijos abajo.
+      const content = popup.getElement().querySelector<HTMLElement>(".maplibregl-popup-content");
+      if (!content) return;
+      const room = mapEl.clientHeight - insetTop - insetBottom - (below ? 0 : Math.abs(offset[1])) - POPUP_TIP;
+      content.style.maxHeight = `${Math.max(room, POPUP_MIN_HEIGHT)}px`;
+      // MapLibre enfoca el primer botón al abrir, y eso recorría el globo hasta abajo.
+      content.querySelector(".popup__body")?.scrollTo(0, 0);
+      /** Cuánto se sale el globo del área visible (negativo: arriba o a la izquierda). */
+      const overflow = () => {
+        const box = popup.getElement().getBoundingClientRect();
+        const frame = mapEl.getBoundingClientRect();
+        const left = box.left - frame.left - POPUP_MARGIN;
+        const right = box.right - frame.right + POPUP_MARGIN;
+        return {
+          dx: left < 0 ? left : right > 0 ? Math.min(right, left) : 0,
+          dy: below
+            ? Math.max(box.bottom - frame.bottom + insetBottom, 0)
+            : Math.min(box.top - frame.top - insetTop, 0),
+        };
+      };
+      // Si el límite del mapa no deja moverlo más: abrirlo debajo del pin si ahí hay
+      // más espacio, o encogerlo para que se vea completo.
+      const settle = () => {
+        if (!popup.isOpen()) return;
+        const { dy } = overflow();
+        if (!dy) return;
+        const height = content.getBoundingClientRect().height;
+        const pin = map.project(at).y;
+        if (!below && mapEl.clientHeight - insetBottom - pin > height - Math.abs(dy)) {
+          popup.remove();
+          openPopup(id, at, offset, true);
+          return;
+        }
+        content.style.maxHeight = `${Math.max(height - Math.abs(dy), POPUP_MIN_HEIGHT)}px`;
+      };
+      // Mover el mapa para que el globo entero (y sus botones) quede a la vista.
+      const fit = () => {
+        if (!popup.isOpen()) return;
+        const { dx, dy } = overflow();
+        if (!dx && !dy) return;
+        map.panBy([dx, dy], { duration: 300 });
+        map.once("moveend", settle);
+      };
+      if (map.isMoving()) map.once("moveend", fit);
+      else fit();
     };
 
     map.on("click", "pins", (e) => {
