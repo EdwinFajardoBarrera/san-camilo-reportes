@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { del, put } from "@vercel/blob";
+import { del, put, type PutBlobResult } from "@vercel/blob";
 
 // Fotos en Vercel Blob (gratis en el plan Hobby). En desarrollo, sin token,
 // se puede usar STORAGE_DRIVER=local para guardarlas en public/uploads.
@@ -28,16 +28,33 @@ export function detectImageType(bytes: Uint8Array): { type: string; ext: string 
   return SIGNATURES.find((s) => s.test(bytes)) ?? null;
 }
 
+// Vercel Blob puede crearse como almacén público o privado, y uno privado
+// rechaza las subidas públicas. Se prueba primero público y, si falla, privado;
+// se recuerda lo que funcionó. Las fotos privadas se sirven con /api/fotos.
+let blobAccess: "public" | "private" | null = null;
+
+async function putBlob(name: string, bytes: Uint8Array, contentType: string): Promise<PutBlobResult> {
+  const upload = (access: "public" | "private") =>
+    put(name, Buffer.from(bytes), { access, contentType, cacheControlMaxAge: 60 * 60 * 24 * 365 });
+  if (blobAccess) return upload(blobAccess);
+  try {
+    const blob = await upload("public");
+    blobAccess = "public";
+    return blob;
+  } catch (publicError) {
+    try {
+      const blob = await upload("private");
+      blobAccess = "private";
+      return blob;
+    } catch {
+      throw publicError;
+    }
+  }
+}
+
 export async function savePhoto(bytes: Uint8Array, kind: { type: string; ext: string }): Promise<string> {
   const name = `reportes/${randomUUID()}.${kind.ext}`;
-  if (blobConfigured()) {
-    const blob = await put(name, Buffer.from(bytes), {
-      access: "public",
-      contentType: kind.type,
-      cacheControlMaxAge: 60 * 60 * 24 * 365,
-    });
-    return blob.url;
-  }
+  if (blobConfigured()) return (await putBlob(name, bytes, kind.type)).url;
   if (localConfigured()) {
     const file = path.join(LOCAL_DIR, path.basename(name));
     await mkdir(LOCAL_DIR, { recursive: true });
