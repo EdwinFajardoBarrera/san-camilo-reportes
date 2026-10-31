@@ -46,7 +46,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     url = await savePhoto(bytes, kind);
   } catch (err) {
     console.error("No se pudo guardar la evidencia", err);
-    return error("No se pudo guardar la foto en el almacenamiento. Revisa la configuración de Vercel Blob.", 502);
+    // Solo lo ve el equipo: el detalle de Vercel Blob (sin secretos) ayuda a corregir la configuración.
+    const detail = err instanceof Error ? ` (${err.message})` : "";
+    return error(`No se pudo guardar la foto en el almacenamiento${detail}. Revisa la configuración de Vercel Blob.`, 502);
   }
   const result = await setReportEvidence(id, url, user.username);
   if (!result) {

@@ -29,7 +29,10 @@ export function EvidencePhoto({
     setError(null);
     try {
       const res = await fetch(`/api/reports/${reportId}/evidence`, init);
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "No se pudo guardar. Intenta de nuevo.");
+      if (!res.ok) {
+        const message = (await res.json().catch(() => null))?.error;
+        throw new Error(message ?? `No se pudo guardar (error ${res.status}). Intenta de nuevo.`);
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar. Intenta de nuevo.");

@@ -1,5 +1,6 @@
 import "server-only";
 import { query } from "./db";
+import { photoSrc } from "./photoUrl";
 import { PUBLIC_STATUSES, REPORT_RATE_LIMIT, type Category, type Status } from "./config";
 import type { Line } from "./geo";
 import type { Report } from "./types";
@@ -38,8 +39,8 @@ const toReport = (r: Row): Report => ({
   createdAt: r.created_at.toISOString(),
   resolvedAt: r.resolved_at?.toISOString() ?? null,
   path: r.path,
-  photoUrl: r.photo_url,
-  evidenceUrl: r.evidence_url,
+  photoUrl: photoSrc(r.photo_url),
+  evidenceUrl: photoSrc(r.evidence_url),
   evidenceBy: r.evidence_by,
   reporterName: r.reporter_name,
   supportCount: r.support_count,
